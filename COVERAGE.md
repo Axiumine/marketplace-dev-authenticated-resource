@@ -65,7 +65,7 @@ mutation gates stay.
 | `unit` | `test/*.test.mts` | mocked | pure logic, error paths, prod branches — fast, offline |
 | `integration` | `test/integration/*.itest.mts` | **real Redis cluster + real MongoDB + real clamd** | boots the server via `start()` and drives it over HTTP |
 
-This is the **Imprenditore resource tier**: every request goes through
+This is the **ShopOwner resource tier**: every request goes through
 `authorizationAuthenticatedResourceHandler()`, which reads
 `Authorization: Bearer access:<token>` and looks the session up in Redis. There is no cookie
 and no Keygrip here — the refresh cookie belongs to `marketplace-dev-authenticated-authorization`,
@@ -90,14 +90,14 @@ reachable. That is intentional: 100% here means the server was really booted and
 to all three, not that a mock returned the expected value.
 
 **The integration suite writes to MongoDB now** — for the one collection left on this tier.
-Alongside its own Redis access sessions, it seeds a real `azienda` document with the raw driver
+Alongside its own Redis access sessions, it seeds a real `company` document with the raw driver
 (checked by the collection's own `$jsonSchema`, not the Mongoose model) and drives
-`aziendeImprenditore`, `aziendaAdd` and `aziendaDel` for real over HTTP, dropping every document
+`shopOwnerCompanies`, `companyAdd` and `companyDel` for real over HTTP, dropping every document
 it created in `afterAll`. This is new since the `puntoVendita`/`categoria` removal (2026-08-04):
-the two collections the suite used to read only (`puntiVenditaImprenditoreTbl`,
-`categoriePuntoVendita`) are gone, `azienda` is the sole survivor, and a single collection was
+the two collections the suite used to read only (`puntiVenditaShopOwnerTbl`,
+`categoriePuntoVendita`) are gone, `company` is the sole survivor, and a single collection was
 small enough a target to seed and mutate for real. The unit project still carries the error
-paths (duplicate `piva`, a driver failure, an ownership rejection) that would mean corrupting a
+paths (duplicate `vatNumber`, a driver failure, an ownership rejection) that would mean corrupting a
 real index or forging a rejection to reach through HTTP; `tryCatchRethrow` is left unmocked
 there too, so failures really travel through it.
 
@@ -105,7 +105,7 @@ there too, so failures really travel through it.
 
 `vitest.config.mts` inlines `@thedoctorweb_agency/marketplace-common` and `@axiumine/koa-utils`
 alongside `graphql` / `@apollo/server` / `@as-integrations`. The schema embeds GraphQL objects
-those two packages build (`GraphQLIndirizzoBaseFrag`, `GraphQLPositionFrag`, `OnlyIdType`), so
+those two packages build (`GraphQLBaseAddressFrag`, `GraphQLPositionFrag`, `OnlyIdType`), so
 they have to see the *same* transformed `graphql` copy as the sources — otherwise graphql
 refuses the type with "Cannot use GraphQLObjectType … from another module or realm". The bare
 `/graphql/` pattern already covers `graphql-scalars`, `graphql-upload` and `graphql-depth-limit`.
@@ -184,11 +184,11 @@ gates, not a snapshot to compare against. Re-run `yarn test:cov` and `yarn test:
 current baseline; do not restore the old counts.
 
 ⚠️ **`puntoVendita` and `categoria` went the same way, in a second cut on the same day.** This was
-the service hit hardest of the seven: of 4 queries and 6 mutations only the 3 `azienda` mutations
-and `aziendeImprenditore` survived. Gone with the two collections: `categoriePuntoVendita`,
-`puntiVenditaImprenditoreTbl`, `puntoVenditaImprenditore`, `puntoVenditaAdd`, `puntoVenditaDel`,
+the service hit hardest of the seven: of 4 queries and 6 mutations only the 3 `company` mutations
+and `shopOwnerCompanies` survived. Gone with the two collections: `categoriePuntoVendita`,
+`puntiVenditaShopOwnerTbl`, `puntoVenditaShopOwner`, `puntoVenditaAdd`, `puntoVenditaDel`,
 `puntoVenditaDis`, `GraphQLPuntoVendita`, `GraphQLPuntovenditaTbl`, the four punto-vendita-only
-inputs (contatti, orari, indirizzo, farina options) and every test that exercised any of them.
+inputs (contacts, openingHours, address, farina options) and every test that exercised any of them.
 `test/schema.test.mts` now asserts their absence by name rather than staying silent about it.
 Same consequence as the first cut: the coverage and mutation figures below predate this removal
 too — re-run rather than trust the numbers.
@@ -212,8 +212,8 @@ explains a decision, a pattern, or a defect, not because the code it names is st
 
 - **`sanitizeFilter` vs `$exists` — the real one.** `MongoDBConnect` (koa-utils) sets
   `mongoose.set('sanitizeFilter', true)` **globally**, so a bare `$`-operator object inside a
-  filter is stripped and read as a literal value. `puntiVenditaImprenditoreTbl` and
-  `puntoVenditaImprenditore` (both since deleted with `puntoVendita` itself) both passed
+  filter is stripped and read as a literal value. `puntiVenditaShopOwnerTbl` and
+  `puntoVenditaShopOwner` (both since deleted with `puntoVendita` itself) both passed
   `{ deleted: { $exists: false } }` unwrapped, and the first integration query answered:
 
   ```
@@ -222,7 +222,7 @@ explains a decision, a pattern, or a defect, not because the code it names is st
 
   Fixed by wrapping in mongoose's `trusted({ $exists: false })` in both files, which is what the
   admin resource service already did. The pattern outlives the two files it was found in:
-  `aziendeImprenditore` filters the same way and its unit assertion compares against
+  `shopOwnerCompanies` filters the same way and its unit assertion compares against
   `trusted(...)` too, so a regression on the survivor still fails the suite.
 - `src/graphQLApi/schema/mutations/puntoVenditaUpdate.mts` — **deleted**, twice over: first as an
   empty file with no export and no importer, then for good along with the rest of `puntoVendita`.
@@ -240,7 +240,7 @@ Two items used to sit here as **documented but deliberately left alone** — `fu
 `categoriePuntoVendita`'s harmless `GraphQLPuntoVendita`/`Categoria` type mismatch. Both are moot
 now: the functions, the collections and the mismatch all went together in the `puntoVendita`/
 `categoria` removal above. Nothing replaces the entries — there is no equivalent decision pending
-on `azienda`.
+on `company`.
 
 ## Running it
 

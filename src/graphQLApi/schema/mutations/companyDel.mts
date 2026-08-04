@@ -1,7 +1,7 @@
 import { tryCatchRethrow } from '@axiumine/koa-utils/lib/tryCatchRethrow'
-import { IContextImprenditoreAuthenticatedResource } from '@lib/auth/IContextImprenditoreAuthenticatedResource.mjs'
-import { funAziendaDelete } from '@lib/azienda/funAziendaDelete.mjs'
-import { throwIfImprenditoreDontOwnAzienda } from '@lib/azienda/throwIfImprenditoreDontOwnAzienda.mjs'
+import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
+import { funCompanyDelete } from '@lib/company/funCompanyDelete.mjs'
+import { throwIfShopOwnerDontOwnCompany } from '@lib/company/throwIfShopOwnerDontOwnCompany.mjs'
 import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLNonNull } from 'graphql'
 import { Types } from 'mongoose'
 
@@ -16,17 +16,17 @@ interface IArgs {
  * nothing on the platform can name it again. The ownership guard runs first and filters `deleted` too,
  * which is why a second call on the same company answers 403 rather than repeating the stamp.
  */
-export const aziendaDel = {
+export const companyDel = {
 	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'del azienda',
+	description: 'del company',
 	args: {
 		_id: { type: new GraphQLNonNull(GraphQLID) }
 	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextImprenditoreAuthenticatedResource) {
-		await throwIfImprenditoreDontOwnAzienda(ctx.state.user._id, args._id)
+	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args._id)
 
 		try {
-			await funAziendaDelete(args._id, ctx.state.user._id)
+			await funCompanyDelete(args._id, ctx.state.user._id)
 		} catch (e) {
 			tryCatchRethrow(e as GraphQLError | Error)
 		}

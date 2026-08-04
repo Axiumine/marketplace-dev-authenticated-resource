@@ -62,81 +62,81 @@ describe('schema', () => {
 		expect(result.errors).toBeUndefined()
 	})
 
-	// `puntiVenditaImprenditoreTbl`, `puntoVenditaImprenditore` and `categoriePuntoVendita` were
+	// `puntiVenditaShopOwnerTbl`, `puntoVenditaShopOwner` and `categoriePuntoVendita` were
 	// removed with the `puntoVendita` and `categoria` collections on 2026-08-04.
-	// `aziendeImprenditore` is the sole survivor on this tier.
-	it('exposes only the azienda query', () => {
-		expect(fieldsOf('QueriesApi')).toEqual(['aziendeImprenditore'])
+	// `shopOwnerCompanies` is the sole survivor on this tier.
+	it('exposes only the company query', () => {
+		expect(fieldsOf('QueriesApi')).toEqual(['shopOwnerCompanies'])
 	})
 
 	// `puntoVenditaAdd`, `puntoVenditaDel` and `puntoVenditaDis` went the same way.
-	it('exposes only the azienda mutations', () => {
-		expect(fieldsOf('MutationsApi')).toEqual(['aziendaAdd', 'aziendaDel', 'aziendaUpdate'])
+	it('exposes only the company mutations', () => {
+		expect(fieldsOf('MutationsApi')).toEqual(['companyAdd', 'companyDel', 'companyUpdate'])
 	})
 
-	// The owner is the session's, so an `idImprenditore` argument would be a way to ask for
+	// The owner is the session's, so an `idShopOwner` argument would be a way to ask for
 	// somebody else's companies.
 	it('takes no arguments on the list query', () => {
-		expect(argsOf('QueriesApi', 'aziendeImprenditore')).toEqual([])
+		expect(argsOf('QueriesApi', 'shopOwnerCompanies')).toEqual([])
 	})
 
 	it('carries its exact description', () => {
-		expect(descriptionOf('QueriesApi', 'aziendeImprenditore')).toBe('Get aziende imprenditore')
+		expect(descriptionOf('QueriesApi', 'shopOwnerCompanies')).toBe('Get companies shopOwner')
 	})
 })
 
 describe('mutation arguments', () => {
-	// No `idImprenditore` on any of the three: the owner is the session's. `aziendaAdd` takes the input
-	// object alone and `aziendaUpdate` takes it beside the `_id`, so a company cannot be handed to
+	// No `idShopOwner` on any of the three: the owner is the session's. `companyAdd` takes the input
+	// object alone and `companyUpdate` takes it beside the `_id`, so a company cannot be handed to
 	// another owner by saving its card.
 	it.each([
-		['aziendaAdd', ['azienda']],
-		['aziendaDel', ['_id']],
-		['aziendaUpdate', ['_id', 'azienda']]
+		['companyAdd', ['company']],
+		['companyDel', ['_id']],
+		['companyUpdate', ['_id', 'company']]
 	])('%s takes %j', (name, expected) => {
 		expect(argsOf('MutationsApi', name)).toEqual(expected)
 	})
 
 	// Literal text, nothing computes it, pin it.
 	it.each([
-		['aziendaAdd', 'add azienda'],
-		['aziendaDel', 'del azienda'],
-		['aziendaUpdate', 'update azienda']
+		['companyAdd', 'add company'],
+		['companyDel', 'del company'],
+		['companyUpdate', 'update company']
 	])('%s carries its exact description', (name, description) => {
 		expect(descriptionOf('MutationsApi', name)).toBe(description)
 	})
 })
 
 describe('object types', () => {
-	it('GraphQLAzienda carries the company, its owner and its legal seat', () => {
-		expect(fieldsOf('GraphQLAzienda')).toEqual([
+	it('GraphQLCompany carries the company, its owner and its legal seat', () => {
+		expect(fieldsOf('GraphQLCompany')).toEqual([
 			'_id',
-			'idImprenditore',
-			'ragionesociale',
-			'piva',
-			'cf',
-			'referente',
-			'amministratore',
-			'univoco',
-			'pec',
-			'indirizzo',
-			'visura'
+			'idShopOwner',
+			'legalName',
+			'vatNumber',
+			'taxCode',
+			'contactPerson',
+			'administrator',
+			'uniqueCode',
+			'certifiedEmail',
+			'address',
+			'registryExtract'
 		])
-		expect(fieldsOf('GraphQLAziendaIndirizzo').length).toBeGreaterThan(0)
-		expect(typeOfField('GraphQLAziendaIndirizzo', 'position')).toBe('GraphQLAziendaPosition!')
+		expect(fieldsOf('GraphQLCompanyAddress').length).toBeGreaterThan(0)
+		expect(typeOfField('GraphQLCompanyAddress', 'position')).toBe('GraphQLCompanyPosition!')
 	})
 
-	// `cf` and `univoco` are the two the collection stores only when given. Asserted as the complete
+	// `taxCode` and `uniqueCode` are the two the collection stores only when given. Asserted as the complete
 	// list of nullables rather than one at a time: a NonNull dropped from any other field would let a
 	// missing value read back as null instead of failing the row.
-	it('leaves cf and univoco nullable on a company, and nothing else', () => {
-		const nullable = fieldsOf('GraphQLAzienda').filter((name) => !typeOfField('GraphQLAzienda', name).endsWith('!'))
+	it('leaves taxCode and uniqueCode nullable on a company, and nothing else', () => {
+		const nullable = fieldsOf('GraphQLCompany').filter((name) => !typeOfField('GraphQLCompany', name).endsWith('!'))
 
-		expect(nullable).toEqual(['cf', 'univoco'])
+		expect(nullable).toEqual(['taxCode', 'uniqueCode'])
 	})
 
 	// `GraphQLPuntoVendita` and `GraphQLPuntovenditaTbl` were removed with the `puntoVendita`
-	// collection on 2026-08-04 — nothing on this tier resolves an `azienda` through a shop any more.
+	// collection on 2026-08-04 — nothing on this tier resolves an `company` through a shop any more.
 	it('does not carry the removed punto vendita types', () => {
 		expect(types.has('GraphQLPuntoVendita')).toBe(false)
 		expect(types.has('GraphQLPuntovenditaTbl')).toBe(false)
@@ -144,21 +144,21 @@ describe('object types', () => {
 })
 
 describe('input types', () => {
-	// `GraphQLInputAzienda` mirrors the output type minus the two fields the server sets.
+	// `GraphQLInputCompany` mirrors the output type minus the two fields the server sets.
 	it('mirrors the company, minus the two fields the owner cannot set', () => {
-		expect(inputFieldsOf('GraphQLInputAzienda')).toEqual(
-			fieldsOf('GraphQLAzienda').filter((f) => f !== '_id' && f !== 'idImprenditore')
+		expect(inputFieldsOf('GraphQLInputCompany')).toEqual(
+			fieldsOf('GraphQLCompany').filter((f) => f !== '_id' && f !== 'idShopOwner')
 		)
-		expect(inputFieldsOf('GraphQLInputAziendaIndirizzo')).toEqual(fieldsOf('GraphQLAziendaIndirizzo'))
-		expect(inputFieldsOf('GraphQLInputAziendaPosition')).toEqual(fieldsOf('GraphQLAziendaPosition'))
+		expect(inputFieldsOf('GraphQLInputCompanyAddress')).toEqual(fieldsOf('GraphQLCompanyAddress'))
+		expect(inputFieldsOf('GraphQLInputCompanyPosition')).toEqual(fieldsOf('GraphQLCompanyPosition'))
 	})
 
-	// The four punto-vendita-only inputs (contatti, orari, indirizzo, farina options) were removed
+	// The four punto-vendita-only inputs (contacts, openingHours, address, farina options) were removed
 	// with the collection they served on 2026-08-04.
 	it('does not carry the removed punto vendita inputs', () => {
-		expect(types.has('GraphQLInputPuntoVenditaContatti')).toBe(false)
-		expect(types.has('GraphQLInputPuntoVenditaOrari')).toBe(false)
-		expect(types.has('GraphQLInputPuntoVenditaIndirizzo')).toBe(false)
+		expect(types.has('GraphQLInputPuntoVenditaContacts')).toBe(false)
+		expect(types.has('GraphQLInputPuntoVenditaOpeningHours')).toBe(false)
+		expect(types.has('GraphQLInputPuntoVenditaAddress')).toBe(false)
 		expect(types.has('GraphQLInputOpzFarine')).toBe(false)
 	})
 })

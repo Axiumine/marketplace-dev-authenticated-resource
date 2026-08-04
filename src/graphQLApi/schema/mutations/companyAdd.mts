@@ -1,15 +1,15 @@
 import { OnlyIdType } from '@axiumine/koa-utils/graphQL/schema/types/OnlyIdType'
 import { tryCatchRethrow } from '@axiumine/koa-utils/lib/tryCatchRethrow'
-import { GraphQLInputAzienda } from '@GraphQLInput/GraphQLInputAzienda.mjs'
-import { IContextImprenditoreAuthenticatedResource } from '@lib/auth/IContextImprenditoreAuthenticatedResource.mjs'
-import { IAziendaUpdate } from '@lib/azienda/funAziendaUpdate.mjs'
-import { Azienda } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Azienda'
-import { IAziendaSchema } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/IAziendaSchema'
+import { GraphQLInputCompany } from '@GraphQLInput/GraphQLInputCompany.mjs'
+import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
+import { ICompanyUpdate } from '@lib/company/funCompanyUpdate.mjs'
+import { Company } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Company'
+import { ICompanySchema } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/ICompanySchema'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
 import { Types } from 'mongoose'
 
 interface IArgs {
-	azienda: IAziendaUpdate
+	company: ICompanyUpdate
 }
 
 /**
@@ -23,24 +23,24 @@ interface IArgs {
  * is "create the company, then create the shop under it" and the second step needs the id the first one
  * produced.
  */
-export const aziendaAdd = {
+export const companyAdd = {
 	type: new GraphQLNonNull(OnlyIdType),
-	description: 'add azienda',
+	description: 'add company',
 	args: {
-		azienda: { type: new GraphQLNonNull(GraphQLInputAzienda) }
+		company: { type: new GraphQLNonNull(GraphQLInputCompany) }
 	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextImprenditoreAuthenticatedResource) {
-		const nuovaAzienda: IAziendaSchema = {
+	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+		const newCompany: ICompanySchema = {
 			_id: new Types.ObjectId(),
-			idImprenditore: ctx.state.user._id,
-			...args.azienda
+			idShopOwner: ctx.state.user._id,
+			...args.company
 		}
 
 		// `return await`, not `return`: without the await the promise escapes the try, so the catch
 		// below can never run and a duplicate partita IVA would surface as an unhandled rejection
 		// instead of the 409 tryCatchRethrow makes of it.
 		try {
-			return await Azienda.create(nuovaAzienda)
+			return await Company.create(newCompany)
 		} catch (e) {
 			tryCatchRethrow(e as GraphQLError | Error)
 		}

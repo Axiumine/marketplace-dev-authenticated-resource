@@ -1,15 +1,15 @@
 import { GraphQLObjectType } from 'graphql'
 
-import { aziendaAdd } from './mutations/aziendaAdd.mjs'
-import { aziendaDel } from './mutations/aziendaDel.mjs'
-import { aziendaUpdate } from './mutations/aziendaUpdate.mjs'
+import { companyAdd } from './mutations/companyAdd.mjs'
+import { companyDel } from './mutations/companyDel.mjs'
+import { companyUpdate } from './mutations/companyUpdate.mjs'
 
 const MutationsApi = new GraphQLObjectType({
 	name: 'MutationsApi',
 	fields: {
-		aziendaAdd,
-		aziendaDel,
-		aziendaUpdate
+		companyAdd,
+		companyDel,
+		companyUpdate
 	}
 })
 

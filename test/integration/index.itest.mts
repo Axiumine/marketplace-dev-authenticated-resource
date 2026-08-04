@@ -65,53 +65,53 @@ async function withSession(_id = new mongoose.Types.ObjectId(), email = 'oste@ma
 
 /****************************************************************************************
  * Seeds. The end-to-end reads need MongoDB to actually hold something owned by the session,
- * so they write a real azienda to the dev database and delete it again in afterAll.
+ * so they write a real company to the dev database and delete it again in afterAll.
  ****************************************************************************************/
 
-const seededAziende: mongoose.Types.ObjectId[] = []
+const seededCompanies: mongoose.Types.ObjectId[] = []
 const seededKeys: string[] = []
 
 /**
  * The legal seat. GeoJSON order: [longitude, latitude]. Plain JS numbers, not Decimal128.
  */
-const INDIRIZZO_SEED = {
-	indirizzo: 'Via Test 1',
-	cap: '24031',
-	comune: 'Almenno San Salvatore',
-	provincia: 'BG',
+const ADDRESS_SEED = {
+	street: 'Via Test 1',
+	postalCode: '24031',
+	city: 'Almenno San Salvatore',
+	province: 'BG',
 	position: { type: 'Point', coordinates: [9.57, 45.75] }
 }
 
 /**
- * One company, owned by an imprenditore.
+ * One company, owned by an shopOwner.
  *
  * Inserted with the raw driver rather than the Mongoose model so the seed is checked by the collection's
- * own `$jsonSchema` — `additionalProperties: false`, `piva` exactly 11 characters, `provincia` exactly
+ * own `$jsonSchema` — `additionalProperties: false`, `vatNumber` exactly 11 characters, `province` exactly
  * 2, `position.coordinates` two in-range doubles.
  *
- * `piva` and `pec` both carry globally unique indexes, so both are cut from the document's own `_id` —
+ * `vatNumber` and `certifiedEmail` both carry globally unique indexes, so both are cut from the document's own `_id` —
  * fixed literals make the second seed of the same run collide.
  */
-async function seedAzienda(idImprenditore: mongoose.Types.ObjectId) {
+async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 	const _id = new mongoose.Types.ObjectId()
-	const ragionesociale = `Itest Pizzeria ${randomUUID()}`
+	const legalName = `Itest Pizzeria ${randomUUID()}`
 
 	await db()
-		.collection('azienda')
+		.collection('company')
 		.insertOne({
 			_id,
-			idImprenditore,
-			ragionesociale,
-			piva: _id.toHexString().slice(-11),
-			referente: 'Itest Referente',
-			amministratore: 'Itest Amministratore',
-			pec: `itest-${_id.toHexString()}@pec.invalid`,
-			indirizzo: INDIRIZZO_SEED,
-			visura: 'itest-visura'
+			idShopOwner,
+			legalName,
+			vatNumber: _id.toHexString().slice(-11),
+			contactPerson: 'Itest ContactPerson',
+			administrator: 'Itest Administrator',
+			certifiedEmail: `itest-${_id.toHexString()}@certifiedEmail.invalid`,
+			address: ADDRESS_SEED,
+			registryExtract: 'itest-registryExtract'
 		})
-	seededAziende.push(_id)
+	seededCompanies.push(_id)
 
-	return { _id, ragionesociale }
+	return { _id, legalName }
 }
 
 beforeAll(async () => {
@@ -119,7 +119,7 @@ beforeAll(async () => {
 })
 
 // Drop whatever this run created while the handles are still open: documents, then every session key.
-afterAll(() => drainAndClose(httpServer, { aziende: seededAziende, keys: seededKeys }))
+afterAll(() => drainAndClose(httpServer, { companies: seededCompanies, keys: seededKeys }))
 
 describe('authenticated-resource service (integration, real MongoDB + real Redis cluster)', () => {
 	// start() is what wires both datasources and arms ClamAV; asserting the live handles is what
@@ -143,7 +143,7 @@ describe('authenticated-resource service (integration, real MongoDB + real Redis
 })
 
 describe('bearer-token gate over HTTP', () => {
-	const query = '{ aziendeImprenditore { _id } }'
+	const query = '{ shopOwnerCompanies { _id } }'
 
 	it('answers 412 when the request carries no authorization header', async () => {
 		const { status, json } = await gql(query)
@@ -171,26 +171,26 @@ describe('GraphQL over HTTP', () => {
 	// The company list the shop form used to pick from, straight off the real collection. Same
 	// ownership filter throughout this tier, and the negative half below is what proves the filter
 	// is doing the work.
-	it('lists the aziende of the authenticated imprenditore, and only those', async () => {
+	it('lists the companies of the authenticated shopOwner, and only those', async () => {
 		const session = await withSession()
 		const stranger = await withSession()
-		const azienda = await seedAzienda(session._id)
-		await seedAzienda(stranger._id)
+		const company = await seedCompany(session._id)
+		await seedCompany(stranger._id)
 
 		try {
-			const query = '{ aziendeImprenditore { _id ragionesociale cf univoco indirizzo { comune } } }'
+			const query = '{ shopOwnerCompanies { _id legalName taxCode uniqueCode address { city } } }'
 			const { json } = await gql(query, session.headers)
 
 			expect(json.errors).toBeUndefined()
-			// `cf` and `univoco` are the two nullable fields on the type and the seed omits both: they
+			// `taxCode` and `uniqueCode` are the two nullable fields on the type and the seed omits both: they
 			// come back null rather than failing the read, which is what the collection allows.
-			expect(json.data?.aziendeImprenditore).toEqual([
+			expect(json.data?.shopOwnerCompanies).toEqual([
 				{
-					_id: azienda._id.toHexString(),
-					ragionesociale: azienda.ragionesociale,
-					cf: null,
-					univoco: null,
-					indirizzo: { comune: INDIRIZZO_SEED.comune }
+					_id: company._id.toHexString(),
+					legalName: company.legalName,
+					taxCode: null,
+					uniqueCode: null,
+					address: { city: ADDRESS_SEED.city }
 				}
 			])
 		} finally {
@@ -227,37 +227,37 @@ describe('GraphQL over HTTP', () => {
 })
 
 /*
- * `aziendaDel` retires a company instead of removing it, so every assertion here is about a row that
+ * `companyDel` retires a company instead of removing it, so every assertion here is about a row that
  * is still on disk. Unit tests mock the model and cannot see any of it: that `trusted({ $exists: false })`
  * survives the global `sanitizeFilter` is a driver-level fact, and so is the collection's reaction to a
  * `$set` of a field the validator only recently gained.
  *
- * `piva` and `pec` carry plain global unique indexes — no `partialFilterExpression` — so a retired
+ * `vatNumber` and `certifiedEmail` carry plain global unique indexes — no `partialFilterExpression` — so a retired
  * company keeps its partita IVA occupied. That is a decision, not an oversight, and the last case here
  * pins it: the same VAT number cannot be registered again after the retirement.
  */
-describe('aziendaDel (soft delete against the real collection)', () => {
+describe('companyDel (soft delete against the real collection)', () => {
 	it('stamps deleted and keeps the row', async () => {
 		const session = await withSession()
-		const azienda = await seedAzienda(session._id)
-		const prima = new Date()
+		const company = await seedCompany(session._id)
+		const before = new Date()
 
 		try {
-			const { json } = await gql(`mutation { aziendaDel(_id: "${azienda._id.toHexString()}") }`, session.headers)
+			const { json } = await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			expect(json.errors).toBeUndefined()
-			expect(json.data?.aziendaDel).toBe(true)
+			expect(json.data?.companyDel).toBe(true)
 
-			const dopo = await db().collection('azienda').findOne({ _id: azienda._id })
+			const after = await db().collection('company').findOne({ _id: company._id })
 			// The row survives, which is the whole point, and the rest of it is untouched. `Date.now()`
 			// is a number — mongoose casts it to the `deleted` path — so a cast that stopped happening
 			// would store an int the validator refuses and `toBeInstanceOf` would catch what a truthy
 			// check would not.
-			expect(dopo).not.toBeNull()
-			expect(dopo?.deleted).toBeInstanceOf(Date)
-			expect((dopo?.deleted as Date).getTime()).toBeGreaterThanOrEqual(prima.getTime() - 1000)
-			expect(dopo?.ragionesociale).toBe(azienda.ragionesociale)
-			expect(dopo?.idImprenditore).toEqual(session._id)
+			expect(after).not.toBeNull()
+			expect(after?.deleted).toBeInstanceOf(Date)
+			expect((after?.deleted as Date).getTime()).toBeGreaterThanOrEqual(before.getTime() - 1000)
+			expect(after?.legalName).toBe(company.legalName)
+			expect(after?.idShopOwner).toEqual(session._id)
 		} finally {
 			await session.cleanup()
 		}
@@ -265,40 +265,40 @@ describe('aziendaDel (soft delete against the real collection)', () => {
 
 	// The read side of the same stamp: the company disappears from the list that draws the shop form's
 	// company picker, without disappearing from the database.
-	it('drops the company out of aziendeImprenditore', async () => {
+	it('drops the company out of shopOwnerCompanies', async () => {
 		const session = await withSession()
-		const azienda = await seedAzienda(session._id)
+		const company = await seedCompany(session._id)
 
 		try {
-			await gql(`mutation { aziendaDel(_id: "${azienda._id.toHexString()}") }`, session.headers)
-			const { json } = await gql('{ aziendeImprenditore { _id } }', session.headers)
+			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
+			const { json } = await gql('{ shopOwnerCompanies { _id } }', session.headers)
 
 			expect(json.errors).toBeUndefined()
-			expect(json.data?.aziendeImprenditore).toEqual([])
-			expect(await db().collection('azienda').countDocuments({ _id: azienda._id })).toBe(1)
+			expect(json.data?.shopOwnerCompanies).toEqual([])
+			expect(await db().collection('company').countDocuments({ _id: company._id })).toBe(1)
 		} finally {
 			await session.cleanup()
 		}
 	})
 
-	// The consequence of leaving `piva_unique` a plain global index. The index is what refuses the
-	// second registration, and it only exists on the collection — no unit test of `aziendaAdd` can
-	// reach it. `pec` is deliberately different so the collision can only be the partita IVA.
+	// The consequence of leaving `vatNumber_unique` a plain global index. The index is what refuses the
+	// second registration, and it only exists on the collection — no unit test of `companyAdd` can
+	// reach it. `certifiedEmail` is deliberately different so the collision can only be the partita IVA.
 	it('leaves the partita IVA registered, so the same one cannot be added again', async () => {
 		const session = await withSession()
-		const azienda = await seedAzienda(session._id)
-		const piva = azienda._id.toHexString().slice(-11)
+		const company = await seedCompany(session._id)
+		const vatNumber = company._id.toHexString().slice(-11)
 
 		try {
-			await gql(`mutation { aziendaDel(_id: "${azienda._id.toHexString()}") }`, session.headers)
+			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			const { json } = await gql(
-				`mutation { aziendaAdd(azienda: { ragionesociale: "Itest Ripescata", piva: "${piva}", referente: "Itest Referente", amministratore: "Itest Amministratore", pec: "itest-${randomUUID()}@pec.invalid", visura: "itest-visura", indirizzo: { indirizzo: "Via Test 1", cap: "24031", comune: "Almenno San Salvatore", provincia: "BG", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
+				`mutation { companyAdd(company: { legalName: "Itest Ripescata", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", address: { street: "Via Test 1", postalCode: "24031", city: "Almenno San Salvatore", province: "BG", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
 				session.headers
 			)
 
 			expect(json.errors?.[0]?.message).toBe('Conflict')
-			expect(await db().collection('azienda').countDocuments({ piva })).toBe(1)
+			expect(await db().collection('company').countDocuments({ vatNumber })).toBe(1)
 		} finally {
 			await session.cleanup()
 		}
@@ -309,16 +309,16 @@ describe('aziendaDel (soft delete against the real collection)', () => {
 	// move is what separates "refused" from "silently applied twice".
 	it('answers Forbidden on a company it already retired', async () => {
 		const session = await withSession()
-		const azienda = await seedAzienda(session._id)
+		const company = await seedCompany(session._id)
 
 		try {
-			await gql(`mutation { aziendaDel(_id: "${azienda._id.toHexString()}") }`, session.headers)
-			const primo = (await db().collection('azienda').findOne({ _id: azienda._id }))?.deleted as Date
+			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
+			const first = (await db().collection('company').findOne({ _id: company._id }))?.deleted as Date
 
-			const { json } = await gql(`mutation { aziendaDel(_id: "${azienda._id.toHexString()}") }`, session.headers)
+			const { json } = await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			expect(json.errors?.[0]?.message).toBe('Forbidden')
-			expect((await db().collection('azienda').findOne({ _id: azienda._id }))?.deleted).toEqual(primo)
+			expect((await db().collection('company').findOne({ _id: company._id }))?.deleted).toEqual(first)
 		} finally {
 			await session.cleanup()
 		}

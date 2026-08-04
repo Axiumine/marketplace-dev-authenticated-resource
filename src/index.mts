@@ -5,7 +5,7 @@ import { MongoDBConnect } from '@axiumine/koa-utils/dataSources/MongoDB'
 import { RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
 import { initClamScan } from '@axiumine/koa-utils/files/scanVirus'
 import { tdwKoaErrorHandler } from '@axiumine/koa-utils/koa/tdwKoaErrorHandler'
-import { IContextImprenditoreAuthenticatedResource } from '@lib/auth/IContextImprenditoreAuthenticatedResource.mjs'
+import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { authorizationAuthenticatedResourceHandler } from '@lib/db/authorizationAuthenticatedResourceHandler.mjs'
 import { disconnectAllDatabases } from '@lib/db/disconnectAllDatabases.mjs'
 import * as Sentry from '@sentry/node'
@@ -122,7 +122,7 @@ export async function createServer() {
 
 	// No cookie signing keys here: this tier authenticates with the `Authorization: Bearer access:`
 	// header against Redis. The refresh cookie is minted and read by the authorization services.
-	app.use(async (ctx: IContextImprenditoreAuthenticatedResource, next: Next) => {
+	app.use(async (ctx: IContextShopOwnerAuthenticatedResource, next: Next) => {
 		await authorizationAuthenticatedResourceHandler()(ctx, next)
 	})
 
@@ -137,7 +137,7 @@ export async function createServer() {
 				json: ['application/json']
 			}
 		})
-	) // serve anche per Apollo
+	) // needed by Apollo too
 
 	/****************
 	 * KOA ENDPOINT
@@ -223,7 +223,7 @@ export async function start() {
 		return { httpServer, apolloServer }
 	} catch (error) {
 		console.error('error', error)
-		Sentry.captureException(error) // @fixme non invia il log verifica !
+		Sentry.captureException(error) // @fixme does not send the log — check!
 		await disconnectAllDatabases(1)
 	}
 }

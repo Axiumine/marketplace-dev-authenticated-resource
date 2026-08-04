@@ -64,9 +64,9 @@ export async function drainDocuments(collection: string, ids: mongoose.Types.Obj
  */
 export async function drainAndClose(
 	httpServer: Server,
-	seeded: { aziende: mongoose.Types.ObjectId[]; keys: string[] }
+	seeded: { companies: mongoose.Types.ObjectId[]; keys: string[] }
 ) {
-	await drainDocuments('azienda', seeded.aziende)
+	await drainDocuments('company', seeded.companies)
 	// One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
 	for (const key of seeded.keys) {
 		await drainSafely(key, () => redisClient.del(key))

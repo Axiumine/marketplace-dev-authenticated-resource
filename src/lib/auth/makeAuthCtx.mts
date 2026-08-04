@@ -1,9 +1,9 @@
-import { IRedisDataImprenditore } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataImprenditore'
-import { IRedisDataImprenditoreForNode } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataImprenditoreForNode'
+import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
+import { IRedisDataShopOwnerForNode } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwnerForNode'
 import { Types } from 'mongoose'
 
-export function makeAuthCtx(redData: IRedisDataImprenditore): IRedisDataImprenditoreForNode {
-	let dt: IRedisDataImprenditoreForNode = {
+export function makeAuthCtx(redData: IRedisDataShopOwner): IRedisDataShopOwnerForNode {
+	let dt: IRedisDataShopOwnerForNode = {
 		_id: new Types.ObjectId(redData._id),
 		email: redData.email
 	}

@@ -9,7 +9,7 @@ import { nodeNextResolver } from './vitest.shared.mts'
 // chain keeps a single transformed instance across index.mts and Apollo. dedupe pins the path.
 //
 // marketplace-common and koa-utils are in the list too: the schema embeds GraphQL objects built by
-// them (GraphQLIndirizzoBaseFrag, GraphQLIndirizzoFrag, GraphQLPositionFrag, OnlyIdType), so they
+// them (GraphQLBaseAddressFrag, GraphQLAddressFrag, GraphQLPositionFrag, OnlyIdType), so they
 // have to see the same transformed graphql copy as the sources. The bare /graphql/ pattern already
 // covers graphql-scalars, graphql-upload and graphql-depth-limit, which build scalars and
 // validation rules from the same package.

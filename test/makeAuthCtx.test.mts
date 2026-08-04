@@ -18,7 +18,7 @@ describe('makeAuthCtx', () => {
 	})
 
 	// onboardingStep is optional and must stay absent rather than become `undefined`: the key is
-	// only written to Redis while the imprenditore is still walking through onboarding.
+	// only written to Redis while the shopOwner is still walking through onboarding.
 	it('copies onboardingStep across when the session carries one', () => {
 		const user = makeAuthCtx({ _id: OID, email: 'oste@marketplace.test', onboardingStep: '3' })
 

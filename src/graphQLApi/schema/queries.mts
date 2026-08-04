@@ -1,11 +1,11 @@
 import { GraphQLObjectType } from 'graphql'
 
-import { aziendeImprenditore } from './queries/aziendeImprenditore.mjs'
+import { shopOwnerCompanies } from './queries/shopOwnerCompanies.mjs'
 
 const QueriesApi = new GraphQLObjectType({
 	name: 'QueriesApi',
 	fields: {
-		aziendeImprenditore
+		shopOwnerCompanies
 	}
 })
 

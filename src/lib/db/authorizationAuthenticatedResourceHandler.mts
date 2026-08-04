@@ -2,20 +2,20 @@ import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { throwAccessTokenExpiredOrDeleted } from '@axiumine/koa-utils/graphQL/throw/throwAccessTokenExpiredOrDeleted'
 import { throwAccessTokenRequired } from '@axiumine/koa-utils/graphQL/throw/throwAccessTokenRequired'
 import { throwPreconditionFailedNoAuthHeader } from '@axiumine/koa-utils/graphQL/throw/throwPreconditionFailedNoAuthHeader'
-import { IContextImprenditoreAuthenticatedResource } from '@lib/auth/IContextImprenditoreAuthenticatedResource.mjs'
+import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { makeAuthCtx } from '@lib/auth/makeAuthCtx.mjs'
-import { IRedisDataImprenditore } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataImprenditore'
+import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
 import * as dotenv from 'dotenv'
 import { Next } from 'koa'
 
 dotenv.config()
 
 export const authorizationAuthenticatedResourceHandler =
-	() => async (ctx: IContextImprenditoreAuthenticatedResource, next: Next) => {
+	() => async (ctx: IContextShopOwnerAuthenticatedResource, next: Next) => {
 		/***************************
 		 * CLIENT: Invia opaque token
 		 * - in authorization: ctx.request.header.authorization =  'Bearer TOKEN_HERE
-		 * - in cookie: ctx.request.header.cookie = nome_cookie=TOKEN_HERE
+		 * - in cookie: ctx.request.header.cookie = firstName_cookie=TOKEN_HERE
 		 */
 		//console.debug('[authorizationAuthenticatedResourceHandler]')
 
@@ -48,7 +48,7 @@ export const authorizationAuthenticatedResourceHandler =
 
 			const redAccessSession = await redisClient.hGetAll(`${process.env.REDIS_KEY}${accessToken}`) // 'access:' already present
 			if (redAccessSession != null && Object.keys(redAccessSession).length !== 0) {
-				const redData = { ...redAccessSession } as unknown as IRedisDataImprenditore // For safety, Redis return an object without the default Object.prototype  in its prototype chain.
+				const redData = { ...redAccessSession } as unknown as IRedisDataShopOwner // For safety, Redis return an object without the default Object.prototype  in its prototype chain.
 				ctx.state.user = makeAuthCtx(redData)
 			} else throwAccessTokenExpiredOrDeleted()
 		}

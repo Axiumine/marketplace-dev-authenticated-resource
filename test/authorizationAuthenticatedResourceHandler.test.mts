@@ -1,7 +1,7 @@
 import type { Next } from 'koa'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { IContextImprenditoreAuthenticatedResource } from '../src/lib/auth/IContextImprenditoreAuthenticatedResource.mts'
+import type { IContextShopOwnerAuthenticatedResource } from '../src/lib/auth/IContextShopOwnerAuthenticatedResource.mts'
 
 const hGetAll = vi.fn()
 
@@ -14,7 +14,7 @@ const ACCESS = 'access:27119032-9043-4a9f-bd4c-9d06fd576290'
 const OID = '507f1f77bcf86cd799439011'
 
 function makeCtx(header?: Record<string, string>) {
-	return { request: { header }, state: {} } as unknown as IContextImprenditoreAuthenticatedResource
+	return { request: { header }, state: {} } as unknown as IContextShopOwnerAuthenticatedResource
 }
 
 /** Redis returns a prototype-less object; the handler spreads it, so mimic that shape. */
@@ -44,7 +44,7 @@ describe('authorizationAuthenticatedResourceHandler', () => {
 		expect(next).toHaveBeenCalledTimes(1)
 	})
 
-	// The onboarding step lives in the session, not in MongoDB — an imprenditore mid-onboarding has
+	// The onboarding step lives in the session, not in MongoDB — an shopOwner mid-onboarding has
 	// to carry it into every request without a second round-trip.
 	it('carries onboardingStep through when the session has one', async () => {
 		hGetAll.mockResolvedValueOnce(redisSession({ onboardingStep: '2' }))

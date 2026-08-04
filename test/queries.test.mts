@@ -1,20 +1,20 @@
 import { trusted, Types } from 'mongoose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { IContextImprenditoreAuthenticatedResource } from '../src/lib/auth/IContextImprenditoreAuthenticatedResource.mts'
+import type { IContextShopOwnerAuthenticatedResource } from '../src/lib/auth/IContextShopOwnerAuthenticatedResource.mts'
 
-const aziendaFind = vi.fn()
+const companyFind = vi.fn()
 
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Azienda', () => ({
-	Azienda: { find: aziendaFind }
+vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Company', () => ({
+	Company: { find: companyFind }
 }))
 
-const { aziendeImprenditore } = await import('../src/graphQLApi/schema/queries/aziendeImprenditore.mts')
+const { shopOwnerCompanies } = await import('../src/graphQLApi/schema/queries/shopOwnerCompanies.mts')
 
 const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
-const idAzienda = new Types.ObjectId('507f1f77bcf86cd799439015')
+const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
 
-const ctx = { state: { user: { _id: userId } } } as unknown as IContextImprenditoreAuthenticatedResource
+const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwnerAuthenticatedResource
 
 /** Query builders end in `.lean()`, all of these with a `.select()` in between. */
 function chain(result: unknown) {
@@ -23,25 +23,25 @@ function chain(result: unknown) {
 }
 
 beforeEach(() => {
-	aziendaFind.mockReset()
+	companyFind.mockReset()
 })
 
-describe('aziendeImprenditore', () => {
+describe('shopOwnerCompanies', () => {
 	// Owner and liveness, the only filter this tier's sole surviving query needs — the owner half is the
-	// ownership check itself since `idImprenditore` comes from the session.
+	// ownership check itself since `idShopOwner` comes from the session.
 	//
 	// The `deleted` clause draws two things at once, the companies list and the `<select>` the shop
 	// form offers, so a retired company left in would be pickable and then refused by
-	// `throwIfImprenditoreDontOwnAzienda` with a 403 the owner cannot act on.
-	it('lists the caller‑owned live aziende, whole', async () => {
-		const docs = [{ _id: idAzienda }]
+	// `throwIfShopOwnerDontOwnCompany` with a 403 the owner cannot act on.
+	it('lists the caller‑owned live companies, whole', async () => {
+		const docs = [{ _id: idCompany }]
 		const builder = chain(docs)
-		aziendaFind.mockReturnValueOnce(builder)
+		companyFind.mockReturnValueOnce(builder)
 
-		await expect(aziendeImprenditore.resolve(null, {}, ctx)).resolves.toBe(docs)
+		await expect(shopOwnerCompanies.resolve(null, {}, ctx)).resolves.toBe(docs)
 
-		expect(aziendaFind).toHaveBeenCalledExactlyOnceWith({
-			idImprenditore: userId,
+		expect(companyFind).toHaveBeenCalledExactlyOnceWith({
+			idShopOwner: userId,
 			deleted: trusted({ $exists: false })
 		})
 		expect(builder.select).not.toHaveBeenCalled()
