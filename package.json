@@ -38,7 +38,7 @@
     "@node-rs/bcrypt": "^1.10.7",
     "@sentry/node": "^10.69.0",
     "@socketlabs/email": "^1.4.4",
-    "@thedoctorweb_agency/marketplace-common": "^3.0.0",
+    "@thedoctorweb_agency/marketplace-common": "^4.0.0",
     "clamscan": "^2.4.0",
     "dotenv": "^17.4.2",
     "file-type": "^22.0.1",
