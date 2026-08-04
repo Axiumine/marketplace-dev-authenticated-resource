@@ -19,10 +19,7 @@ import { Types } from 'mongoose'
  * referential check to make.
  */
 export async function funCompanyDelete(companyId: Types.ObjectId, shopOwnerId: Types.ObjectId) {
-	const ret = await Company.updateOne(
-		{ _id: companyId, idShopOwner: shopOwnerId },
-		{ $set: { deleted: Date.now() } }
-	).exec()
+	const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: { deleted: Date.now() } }).exec()
 
 	if (ret.matchedCount !== 1) {
 		throwInternalError()

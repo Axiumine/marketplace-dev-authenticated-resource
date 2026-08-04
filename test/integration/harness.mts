@@ -62,10 +62,7 @@ export async function drainDocuments(collection: string, ids: mongoose.Types.Obj
  * The tail every suite ends with: the companies seeded, then the session keys, then the three
  * handles.
  */
-export async function drainAndClose(
-	httpServer: Server,
-	seeded: { companies: mongoose.Types.ObjectId[]; keys: string[] }
-) {
+export async function drainAndClose(httpServer: Server, seeded: { companies: mongoose.Types.ObjectId[]; keys: string[] }) {
 	await drainDocuments('company', seeded.companies)
 	// One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
 	for (const key of seeded.keys) {
