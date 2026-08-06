@@ -1,6 +1,6 @@
 import { GraphQLBaseAddressFrag } from '@thedoctorweb_agency/marketplace-common/schema/types/fragments/GraphQLBaseAddressFrag'
 import { GraphQLPositionFrag } from '@thedoctorweb_agency/marketplace-common/schema/types/fragments/GraphQLPositionFrag'
-import { GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLString } from 'graphql'
+import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLString } from 'graphql'
 
 /**
  * The company behind one or more punti vendita, its own collection since 20260803000000.
@@ -25,7 +25,18 @@ export const GraphQLCompany = new GraphQLObjectType({
 		uniqueCode: { type: GraphQLString },
 		certifiedEmail: { type: new GraphQLNonNull(GraphQLString) },
 		address: { type: new GraphQLNonNull(GraphQLCompanyAddress) },
-		registryExtract: { type: new GraphQLNonNull(GraphQLString) }
+		registryExtract: { type: new GraphQLNonNull(GraphQLString) },
+		// The shop half, added by 20260804010000. A company IS the shop on this platform, so the
+		// storefront's fields live on this type rather than on one of its own.
+		//
+		// Three nullable, one not, and the split is the collection's: `published` was backfilled onto
+		// every stored row by the migration and is required, while a company written before the
+		// catalogue existed has no trading name, no slug and no description and cannot be given one
+		// retroactively. The owner fills them in when they decide to go live.
+		publicName: { type: GraphQLString },
+		slug: { type: GraphQLString },
+		description: { type: GraphQLString },
+		published: { type: new GraphQLNonNull(GraphQLBoolean) }
 	})
 })
 

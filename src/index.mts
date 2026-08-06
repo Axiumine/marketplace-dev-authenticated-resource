@@ -21,6 +21,10 @@ import QueriesPublic from './graphQLApi/schema/queries.mjs'
 
 export const ENDPOINT = '/authenticated-resource'
 
+// `DSN` is deliberately NOT in this list. Sentry is optional: `Sentry.init({ dsn: undefined })` is a
+// no-op, so a missing telemetry credential must never stop the service from serving. Requiring it made
+// boot fail *silently* — checkRequiredEnv() runs outside start()'s try, so the throw reached only the
+// top-level `.catch`, which reports to the very Sentry client the missing DSN had just disabled.
 export const REQUIRED_ENV_VARS = [
 	'PORT',
 	'REDIS_IS_CLUSTER',
@@ -42,8 +46,7 @@ export const REQUIRED_ENV_VARS = [
 	'HIT_STATS',
 	'INTROSPECTION_CODE',
 	'PLATFORM_NAME',
-	'SAMESITE_COOKIE',
-	'DSN'
+	'SAMESITE_COOKIE'
 ]
 
 /**

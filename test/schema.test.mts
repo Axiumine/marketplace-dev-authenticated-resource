@@ -64,14 +64,37 @@ describe('schema', () => {
 
 	// `puntiVenditaShopOwnerTbl`, `puntoVenditaShopOwner` and `categoriePuntoVendita` were
 	// removed with the `puntoVendita` and `categoria` collections on 2026-08-04.
-	// `shopOwnerCompanies` is the sole survivor on this tier.
-	it('exposes only the company query', () => {
-		expect(fieldsOf('QueriesApi')).toEqual(['shopOwnerCompanies'])
+	// `companyItems` and `itemCategories` are the catalogue's read side, which is not that
+	// collection coming back: items hang off `company` directly, with no shop in between.
+	it('exposes the company and catalogue queries', () => {
+		expect(fieldsOf('QueriesApi')).toEqual(['companyItems', 'itemCategories', 'shopOwnerCompanies'])
 	})
 
-	// `puntoVenditaAdd`, `puntoVenditaDel` and `puntoVenditaDis` went the same way.
-	it('exposes only the company mutations', () => {
-		expect(fieldsOf('MutationsApi')).toEqual(['companyAdd', 'companyDel', 'companyUpdate'])
+	// `puntoVenditaAdd`, `puntoVenditaDel` and `puntoVenditaDis` went the same way. The three
+	// `item*` are the owner's whole write surface on the catalogue — there is deliberately no
+	// `itemCategory*` here, because the taxonomy is written on the Admin tier alone.
+	it('exposes the company and item mutations', () => {
+		expect(fieldsOf('MutationsApi')).toEqual(['companyAdd', 'companyDel', 'companyUpdate', 'itemAdd', 'itemDel', 'itemUpdate'])
+	})
+
+	// Same reasoning as `shopOwnerCompanies`: the taxonomy is platform-wide, so an argument here
+	// could only narrow it in a way no caller is entitled to define.
+	it('takes no arguments on the category query', () => {
+		expect(argsOf('QueriesApi', 'itemCategories')).toEqual([])
+	})
+
+	// `companyItems` is the one query that does take one, because an owner may hold several
+	// companies and the item list is a per-shop screen. That is exactly why its resolver checks
+	// ownership before reading.
+	it('takes the company id on the item query', () => {
+		expect(argsOf('QueriesApi', 'companyItems')).toEqual(['idCompany'])
+	})
+
+	it.each([
+		['companyItems', 'Get items of a company'],
+		['itemCategories', 'Get item categories']
+	])('%s carries its exact description', (name, description) => {
+		expect(descriptionOf('QueriesApi', name)).toBe(description)
 	})
 
 	// The owner is the session's, so an `idShopOwner` argument would be a way to ask for
@@ -89,10 +112,16 @@ describe('mutation arguments', () => {
 	// No `idShopOwner` on any of the three: the owner is the session's. `companyAdd` takes the input
 	// object alone and `companyUpdate` takes it beside the `_id`, so a company cannot be handed to
 	// another owner by saving its card.
+	// No `idShopOwner` on any of the six: the owner is the session's. The item three carry no
+	// `idShopOwner` either — an item's owner is reached through its company, which is what the
+	// guards traverse.
 	it.each([
 		['companyAdd', ['company']],
 		['companyDel', ['_id']],
-		['companyUpdate', ['_id', 'company']]
+		['companyUpdate', ['_id', 'company']],
+		['itemAdd', ['item']],
+		['itemDel', ['_id']],
+		['itemUpdate', ['_id', 'item']]
 	])('%s takes %j', (name, expected) => {
 		expect(argsOf('MutationsApi', name)).toEqual(expected)
 	})
@@ -101,14 +130,20 @@ describe('mutation arguments', () => {
 	it.each([
 		['companyAdd', 'add company'],
 		['companyDel', 'del company'],
-		['companyUpdate', 'update company']
+		['companyUpdate', 'update company'],
+		['itemAdd', 'add item'],
+		['itemDel', 'del item'],
+		['itemUpdate', 'update item']
 	])('%s carries its exact description', (name, description) => {
 		expect(descriptionOf('MutationsApi', name)).toBe(description)
 	})
 })
 
 describe('object types', () => {
-	it('GraphQLCompany carries the company, its owner and its legal seat', () => {
+	// The last four are the shop listing, not the legal entity: `publicName` is the trading name a
+	// customer sees where `legalName` is a legal instrument, and `published` is the switch that puts
+	// the company on an indexed public page.
+	it('GraphQLCompany carries the company, its owner, its legal seat and its shop listing', () => {
 		expect(fieldsOf('GraphQLCompany')).toEqual([
 			'_id',
 			'idShopOwner',
@@ -120,19 +155,39 @@ describe('object types', () => {
 			'uniqueCode',
 			'certifiedEmail',
 			'address',
-			'registryExtract'
+			'registryExtract',
+			'publicName',
+			'slug',
+			'description',
+			'published'
 		])
 		expect(fieldsOf('GraphQLCompanyAddress').length).toBeGreaterThan(0)
 		expect(typeOfField('GraphQLCompanyAddress', 'position')).toBe('GraphQLCompanyPosition!')
 	})
 
-	// `taxCode` and `uniqueCode` are the two the collection stores only when given. Asserted as the complete
-	// list of nullables rather than one at a time: a NonNull dropped from any other field would let a
-	// missing value read back as null instead of failing the row.
-	it('leaves taxCode and uniqueCode nullable on a company, and nothing else', () => {
+	// The five the collection stores only when given. Asserted as the complete list of nullables
+	// rather than one at a time: a NonNull dropped from any other field would let a missing value read
+	// back as null instead of failing the row. `published` is deliberately not among them — it is
+	// `required: true` on the model, so every row has one and a null would mean the read is wrong.
+	it('leaves the optional company fields nullable, and nothing else', () => {
 		const nullable = fieldsOf('GraphQLCompany').filter((name) => !typeOfField('GraphQLCompany', name).endsWith('!'))
 
-		expect(nullable).toEqual(['taxCode', 'uniqueCode'])
+		expect(nullable).toEqual(['taxCode', 'uniqueCode', 'publicName', 'slug', 'description'])
+	})
+
+	// Every field NonNull, `published` included: an item is either a draft or on a public page, and a
+	// third state read back as null would be silently neither.
+	it('GraphQLItem carries the item, its company and its category', () => {
+		expect(fieldsOf('GraphQLItem')).toEqual(['_id', 'idCompany', 'idCategory', 'name', 'description', 'slug', 'published'])
+		expect(fieldsOf('GraphQLItem').filter((name) => !typeOfField('GraphQLItem', name).endsWith('!'))).toEqual([])
+	})
+
+	// `idParent` is the one nullable, and that nullability *is* the tree: absent means top level,
+	// present means a subcategory of the one it names. Depth is capped at two on the Admin tier.
+	it('GraphQLItemCategory leaves only idParent nullable', () => {
+		expect(fieldsOf('GraphQLItemCategory')).toEqual(['_id', 'idParent', 'name', 'slug', 'position'])
+		expect(typeOfField('GraphQLItemCategory', 'idParent')).toBe('ID')
+		expect(typeOfField('GraphQLItemCategory', 'position')).toBe('Int!')
 	})
 
 	// `GraphQLPuntoVendita` and `GraphQLPuntovenditaTbl` were removed with the `puntoVendita`
@@ -151,6 +206,19 @@ describe('input types', () => {
 		)
 		expect(inputFieldsOf('GraphQLInputCompanyAddress')).toEqual(fieldsOf('GraphQLCompanyAddress'))
 		expect(inputFieldsOf('GraphQLInputCompanyPosition')).toEqual(fieldsOf('GraphQLCompanyPosition'))
+	})
+
+	// `_id` is the only one the server sets. `idCompany` stays writable on purpose — saving an item
+	// is also how it moves between the owner's shops, which is why `itemUpdate` guards the source and
+	// the destination separately.
+	it('mirrors the item, minus the id the server sets', () => {
+		expect(inputFieldsOf('GraphQLInputItem')).toEqual(fieldsOf('GraphQLItem').filter((f) => f !== '_id'))
+	})
+
+	// There is no `GraphQLInputItemCategory` on this tier at all: the taxonomy is written on the
+	// Admin one. An input type here would be the first half of a write path nothing should have.
+	it('carries no category input', () => {
+		expect(types.has('GraphQLInputItemCategory')).toBe(false)
 	})
 
 	// The four punto-vendita-only inputs (contacts, openingHours, address, farina options) were removed

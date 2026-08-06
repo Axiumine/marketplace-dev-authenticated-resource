@@ -50,11 +50,14 @@ describe('checkRequiredEnv', () => {
 		expect(() => checkRequiredEnv({})).toThrow(`Missing required environment variable: ${REQUIRED_ENV_VARS[0]}`)
 	})
 
+	// The *last* entry, so a mutant that stops the loop short is caught and not just one that skips
+	// index 0. It used to be DSN, which is no longer required at all: Sentry is optional, and an
+	// unset DSN leaves the SDK inert rather than stopping the service from serving.
 	it('names a variable missing further down the list', () => {
 		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
-		delete env.DSN
+		delete env.SAMESITE_COOKIE
 
-		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: DSN')
+		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: SAMESITE_COOKIE')
 	})
 })
 
