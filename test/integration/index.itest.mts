@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
+import { TIER } from '@thedoctorweb_agency/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
 import mongoose from 'mongoose'
@@ -54,7 +55,10 @@ async function withSession(_id = new mongoose.Types.ObjectId(), email = 'oste@ma
 	const key = `${REDIS_KEY}${token}`
 
 	seededKeys.push(key)
-	await redisClient.hSet(key, { _id: _id.toHexString(), email })
+	// `tier` is what a real login writes and what this service asserts on every request: the auth
+	// middleware calls assertTier before ctx.state.user is set, so a tier-less seed is refused with
+	// 403 and every test built on this helper fails at the guard instead of reaching its resolver.
+	await redisClient.hSet(key, { _id: _id.toHexString(), email, tier: TIER.shopOwner })
 
 	return {
 		_id,
@@ -107,7 +111,15 @@ async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 			administrator: 'Itest Administrator',
 			certifiedEmail: `itest-${_id.toHexString()}@certifiedEmail.invalid`,
 			address: ADDRESS_SEED,
-			registryExtract: 'itest-registryExtract'
+			registryExtract: 'itest-registryExtract',
+			// `published` is in the collection's `required` list since 20260804010000-alter-company-public,
+			// so a seed without it is rejected outright — the migration widened, backfilled and only then
+			// demanded the field, and this fixture predates all three steps. False is the honest value: the
+			// public face is a separate concern from the legal entity these tests exercise, and a false row
+			// is exactly what `companyAdd` writes. `publicName` and `slug` stay off deliberately — the
+			// collection's `$expr` demands them only of a published row, and `slug` carries a unique index
+			// that a fixed literal would collide on.
+			published: false
 		})
 	seededCompanies.push(_id)
 
@@ -293,7 +305,7 @@ describe('companyDel (soft delete against the real collection)', () => {
 			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			const { json } = await gql(
-				`mutation { companyAdd(company: { legalName: "Itest Ripescata", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", address: { street: "Via Test 1", postalCode: "24031", city: "Almenno San Salvatore", province: "BG", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
+				`mutation { companyAdd(company: { legalName: "Itest Ripescata", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", published: false, address: { street: "Via Test 1", postalCode: "24031", city: "Almenno San Salvatore", province: "BG", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
 				session.headers
 			)
 
