@@ -14,7 +14,7 @@ const funCompanyUpdate = vi.fn()
 // tryCatchRethrow is deliberately NOT mocked: turning a driver error into the right GraphQL status
 // is the behaviour under test here. Only Sentry is stubbed, so its `else` branch stays silent.
 vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn() }))
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Company', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
 	Company: { create: companyCreate }
 }))
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))

@@ -10,11 +10,11 @@ vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.f
 // ⚠️ No `deleteOne` on the Item mock, for the reason `companyLib.test.mts` leaves it off Company:
 // `funItemDelete` soft-deletes, and a regression to a hard removal has to fail here rather than
 // against a real database three services away.
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Company', () => ({ Company: { find: companyFind } }))
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Item', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({ Company: { find: companyFind } }))
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
 	Item: { updateOne: itemUpdateOne, countDocuments: itemCountDocuments }
 }))
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/ItemCategory', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 	ItemCategory: { countDocuments: itemCategoryCountDocuments }
 }))
 

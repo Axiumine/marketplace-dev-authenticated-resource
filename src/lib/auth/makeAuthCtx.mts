@@ -1,5 +1,5 @@
-import { IRedisDataShopOwner } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwner'
-import { IRedisDataShopOwnerForNode } from '@thedoctorweb_agency/marketplace-common/others/Redis/IRedisDataShopOwnerForNode'
+import { IRedisDataShopOwner } from '@axiumine/marketplace-common/others/Redis/IRedisDataShopOwner'
+import { IRedisDataShopOwnerForNode } from '@axiumine/marketplace-common/others/Redis/IRedisDataShopOwnerForNode'
 import { Types } from 'mongoose'
 
 export function makeAuthCtx(redData: IRedisDataShopOwner): IRedisDataShopOwnerForNode {

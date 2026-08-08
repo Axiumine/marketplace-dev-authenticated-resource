@@ -8,11 +8,11 @@ const itemFind = vi.fn()
 const itemCategoryFind = vi.fn()
 const throwIfShopOwnerDontOwnCompany = vi.fn()
 
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Company', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
 	Company: { find: companyFind }
 }))
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Item', () => ({ Item: { find: itemFind } }))
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/ItemCategory', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({ Item: { find: itemFind } }))
+vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 	ItemCategory: { find: itemCategoryFind }
 }))
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))
