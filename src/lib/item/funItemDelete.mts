@@ -4,7 +4,7 @@ import { shopOwnerCompanyIds } from '@lib/company/shopOwnerCompanyIds.mjs'
 import { trusted, Types } from 'mongoose'
 
 /**
- * Withdraws an item. A soft delete, like `funCompanyDelete`: the row stays and gains the instant it
+ * Withdraws an item. A soft delete, like `funCompanyDelete`: the document stays and gains the instant it
  * went. `Date.now()` is a number and the schema path is a `Date` — mongoose casts it.
  *
  * A stamp rather than a removal because the slug index is `{ idCompany, slug }` and stays occupied,

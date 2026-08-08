@@ -31,7 +31,7 @@ export const GraphQLCompany = new GraphQLObjectType({
 		// storefront's fields live on this type rather than on one of its own.
 		//
 		// Three nullable, one not, and the split is the collection's: `published` was backfilled onto
-		// every stored row by the migration and is required, while a company written before the
+		// every stored company by the migration and is required, while a company written before the
 		// catalogue existed has no trading name, no slug and no description and cannot be given one
 		// retroactively. The owner fills them in when they decide to go live.
 		publicName: { type: GraphQLString },

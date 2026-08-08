@@ -115,9 +115,9 @@ async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 			// `published` is in the collection's `required` list since 20260804010000-alter-company-public,
 			// so a seed without it is rejected outright — the migration widened, backfilled and only then
 			// demanded the field, and this fixture predates all three steps. False is the honest value: the
-			// public face is a separate concern from the legal entity these tests exercise, and a false row
+			// public face is a separate concern from the legal entity these tests exercise, and a false flag
 			// is exactly what `companyAdd` writes. `publicName` and `slug` stay off deliberately — the
-			// collection's `$expr` demands them only of a published row, and `slug` carries a unique index
+			// collection's `$expr` demands them only of a published company, and `slug` carries a unique index
 			// that a fixed literal would collide on.
 			published: false
 		})
@@ -239,7 +239,7 @@ describe('GraphQL over HTTP', () => {
 })
 
 /*
- * `companyDel` retires a company instead of removing it, so every assertion here is about a row that
+ * `companyDel` retires a company instead of removing it, so every assertion here is about a document that
  * is still on disk. Unit tests mock the model and cannot see any of it: that `trusted({ $exists: false })`
  * survives the global `sanitizeFilter` is a driver-level fact, and so is the collection's reaction to a
  * `$set` of a field the validator only recently gained.
@@ -249,7 +249,7 @@ describe('GraphQL over HTTP', () => {
  * pins it: the same VAT number cannot be registered again after the retirement.
  */
 describe('companyDel (soft delete against the real collection)', () => {
-	it('stamps deleted and keeps the row', async () => {
+	it('stamps deleted and keeps the document', async () => {
 		const session = await withSession()
 		const company = await seedCompany(session._id)
 		const before = new Date()
@@ -261,7 +261,7 @@ describe('companyDel (soft delete against the real collection)', () => {
 			expect(json.data?.companyDel).toBe(true)
 
 			const after = await db().collection('company').findOne({ _id: company._id })
-			// The row survives, which is the whole point, and the rest of it is untouched. `Date.now()`
+			// The document survives, which is the whole point, and the rest of it is untouched. `Date.now()`
 			// is a number — mongoose casts it to the `deleted` path — so a cast that stopped happening
 			// would store an int the validator refuses and `toBeInstanceOf` would catch what a truthy
 			// check would not.

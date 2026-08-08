@@ -167,8 +167,8 @@ describe('object types', () => {
 
 	// The five the collection stores only when given. Asserted as the complete list of nullables
 	// rather than one at a time: a NonNull dropped from any other field would let a missing value read
-	// back as null instead of failing the row. `published` is deliberately not among them — it is
-	// `required: true` on the model, so every row has one and a null would mean the read is wrong.
+	// back as null instead of failing the read. `published` is deliberately not among them — it is
+	// `required: true` on the model, so every item has one and a null would mean the read is wrong.
 	it('leaves the optional company fields nullable, and nothing else', () => {
 		const nullable = fieldsOf('GraphQLCompany').filter((name) => !typeOfField('GraphQLCompany', name).endsWith('!'))
 

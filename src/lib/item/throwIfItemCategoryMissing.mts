@@ -5,9 +5,9 @@ import { trusted, Types } from 'mongoose'
 /**
  * The category an item is filed under has to exist and still be live.
  *
- * ⚠️ **MongoDB has no foreign keys.** `item.idCategory` is required and typed, and nothing in the
- * collection validator stops it naming a category that was never created — the same arrangement
- * `company.idShopOwner` has. This is the check, and it runs on every item write.
+ * ⚠️ **Nothing enforces this reference.** `item.idCategory` is required and typed, and nothing in
+ * the collection validator stops it naming a category that was never created — the same
+ * arrangement `company.idShopOwner` has. This is the check, and it runs on every item write.
  *
  * 404 rather than 403: a category is platform-wide public data, so a missing one is a stale client
  * or a typo, not an owner reaching for something that is not theirs. `throwIfShopOwnerDontOwnCompany`

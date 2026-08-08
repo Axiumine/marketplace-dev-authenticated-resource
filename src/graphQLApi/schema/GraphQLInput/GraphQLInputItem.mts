@@ -9,7 +9,7 @@ import { GraphQLBoolean, GraphQLID, GraphQLInputObjectType, GraphQLNonNull, Grap
  * something the session determines. It is checked against the session on every write —
  * `throwIfShopOwnerDontOwnCompany` — because an id the client sends is an id the client can guess.
  *
- * `idCategory` names a row of the platform-wide taxonomy, which only an operator may write. The
+ * `idCategory` names a document of the platform-wide taxonomy, which only an operator may write. The
  * owner picks from it and cannot extend it, which is the point: two shops selling the same kind of
  * thing have to land in the same category or the customer-facing filter means nothing.
  *

@@ -21,7 +21,7 @@ interface IArgs {
  * `idCompany` the session does not hold — without it, an owner could stock any shop on the platform,
  * because `idCompany` is a client-supplied id rather than something the session determines (an owner
  * may hold several companies, so it cannot be). `throwIfItemCategoryMissing` refuses a category that
- * does not exist, which MongoDB will not do for us: there are no foreign keys.
+ * does not exist, which the database will not do for us.
  *
  * Ownership first, existence second: a caller who does not own the shop learns nothing about which
  * category ids are real.

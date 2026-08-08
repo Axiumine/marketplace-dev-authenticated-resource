@@ -24,7 +24,7 @@ export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted'>
  * `$set` with the whole object rather than a partial: the input is complete, so a field the owner
  * cleared has to be cleared in the document too.
  *
- * ⚠️ **The `idCompany` clause reads the stored row, not the update.** It is defence in depth of the
+ * ⚠️ **The `idCompany` clause reads the stored item, not the update.** It is defence in depth of the
  * same kind `funCompanyUpdate`'s `idShopOwner` filter is: `throwIfShopOwnerDontOwnItem` has already
  * run, and this refuses the write a second time if the item moved out from under the session between
  * the guard and here. The destination company in `data` is checked separately by the resolver —

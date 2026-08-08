@@ -18,7 +18,7 @@ interface IArgs {
  * catalogue, drafts included, by anyone holding any ShopOwner token.
  *
  * Both drafts and published items come back: this is the owner's own management list, and the
- * `published` flag is what the row renders. The public tier filters it; this one must not.
+ * `published` flag is what the listing renders. The public tier filters it; this one must not.
  *
  * trusted(): `sanitizeFilter` is on globally, so a bare `{ $exists: false }` would be taken as a
  * literal value and cast against the `deleted` path instead of being read as an operator.
