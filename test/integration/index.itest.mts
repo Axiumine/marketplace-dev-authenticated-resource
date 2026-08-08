@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
+import { decryptDocument } from '@axiumine/marketplace-common/encryption/decryptDocument'
+import { encryptDocument } from '@axiumine/marketplace-common/encryption/encryptDocument'
+import { ENCRYPTED_FIELDS_COMPANY, KEY_ALT_NAME_COMPANY } from '@axiumine/marketplace-common/encryption/encryptedFields'
+import { isCiphertext } from '@axiumine/marketplace-common/encryption/isCiphertext'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import * as dotenv from 'dotenv'
 import type { Server } from 'http'
@@ -100,27 +104,37 @@ async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 	const _id = new mongoose.Types.ObjectId()
 	const legalName = `Itest Boutique ${randomUUID()}`
 
+	// ⚠️ Encrypted before the insert, not after (ADR-029). `contactPerson` and `administrator` are
+	// named people, so what the collection holds for them is `binData` subtype 6 — a seed that wrote
+	// plaintext would be a document no resolver on the platform can produce, and every read below
+	// would be asserting against a shape production never has.
 	await db()
 		.collection('company')
-		.insertOne({
-			_id,
-			idShopOwner,
-			legalName,
-			vatNumber: _id.toHexString().slice(-11),
-			contactPerson: 'Itest ContactPerson',
-			administrator: 'Itest Administrator',
-			certifiedEmail: `itest-${_id.toHexString()}@certifiedEmail.invalid`,
-			address: ADDRESS_SEED,
-			registryExtract: 'itest-registryExtract',
-			// `published` is in the collection's `required` list since 20260804010000-alter-company-public,
-			// so a seed without it is rejected outright — the migration widened, backfilled and only then
-			// demanded the field, and this fixture predates all three steps. False is the honest value: the
-			// public face is a separate concern from the legal entity these tests exercise, and a false flag
-			// is exactly what `companyAdd` writes. `publicName` and `slug` stay off deliberately — the
-			// collection's `$expr` demands them only of a published company, and `slug` carries a unique index
-			// that a fixed literal would collide on.
-			published: false
-		})
+		.insertOne(
+			await encryptDocument(
+				{
+					_id,
+					idShopOwner,
+					legalName,
+					vatNumber: _id.toHexString().slice(-11),
+					contactPerson: 'Itest ContactPerson',
+					administrator: 'Itest Administrator',
+					certifiedEmail: `itest-${_id.toHexString()}@certifiedEmail.invalid`,
+					address: ADDRESS_SEED,
+					registryExtract: 'itest-registryExtract',
+					// `published` is in the collection's `required` list since 20260804010000-alter-company-public,
+					// so a seed without it is rejected outright — the migration widened, backfilled and only then
+					// demanded the field, and this fixture predates all three steps. False is the honest value: the
+					// public face is a separate concern from the legal entity these tests exercise, and a false flag
+					// is exactly what `companyAdd` writes. `publicName` and `slug` stay off deliberately — the
+					// collection's `$expr` demands them only of a published company, and `slug` carries a unique index
+					// that a fixed literal would collide on.
+					published: false
+				},
+				ENCRYPTED_FIELDS_COMPANY,
+				KEY_ALT_NAME_COMPANY
+			)
+		)
 	seededCompanies.push(_id)
 
 	return { _id, legalName }
@@ -208,6 +222,44 @@ describe('GraphQL over HTTP', () => {
 		} finally {
 			await session.cleanup()
 			await stranger.cleanup()
+		}
+	})
+
+	// ADR-029, end to end and in both directions: what the collection holds for the two named people
+	// on a company, and what the resolver hands back for the same document. `.lean()` is the shape
+	// worth pinning — the read hook runs on the plain object mongoose never wrapped in a document, so
+	// this is the query that would quietly return `Binary` if the plugin were dropped from the model.
+	it('stores contactPerson and administrator as ciphertext, and reads them back in the clear', async () => {
+		const session = await withSession()
+		const company = await seedCompany(session._id)
+
+		try {
+			const raw = await db().collection('company').findOne({ _id: company._id })
+			// isCiphertext() is `binData` AND subtype 6, not "is a Binary": every other subtype would mean
+			// the value went in as something other than a CSFLE payload.
+			expect(isCiphertext(raw?.contactPerson)).toBe(true)
+			expect(isCiphertext(raw?.administrator)).toBe(true)
+			// Random, not deterministic: neither field is ever a query filter, so two companies sharing a
+			// contact person must not share a ciphertext. Nothing else in this suite would notice the
+			// algorithm being switched.
+			const other = await seedCompany(session._id)
+			const otherRaw = await db().collection('company').findOne({ _id: other._id })
+			expect(otherRaw?.contactPerson).not.toEqual(raw?.contactPerson)
+
+			await decryptDocument(raw)
+			expect(raw?.contactPerson).toBe('Itest ContactPerson')
+			expect(raw?.administrator).toBe('Itest Administrator')
+
+			const { json } = await gql('{ shopOwnerCompanies { _id contactPerson administrator } }', session.headers)
+
+			expect(json.errors).toBeUndefined()
+			expect(json.data?.shopOwnerCompanies).toContainEqual({
+				_id: company._id.toHexString(),
+				contactPerson: 'Itest ContactPerson',
+				administrator: 'Itest Administrator'
+			})
+		} finally {
+			await session.cleanup()
 		}
 	})
 

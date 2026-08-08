@@ -69,19 +69,26 @@ export default {
 		// onUncaughtException and start()'s three failure paths with every datasource mocked.
 		// Only two ranges are excluded, each for a distinct, verified reason:
 		'!src/index.mts',
-		// Lines 1-112: imports through onUncaughtException. Fully reachable from the unit
+		//
+		// ⚠️ These are LINE NUMBERS, and they do not move when the file does. Adding anything above
+		// createServer() slides its body into a range marked "in scope", and the mutants that land
+		// there have no unit test to kill them — the run drops off 100 with survivors nobody
+		// introduced. That is exactly what ADR-029's `await setupFieldEncryption()` did. Re-derive
+		// all three boundaries from the source whenever src/index.mts changes length.
+		//
+		// Lines 1-117: imports through onUncaughtException. Fully reachable from the unit
 		// project — kept in scope.
-		'src/index.mts:1-112',
-		// Lines 113-183 (createServer(), not re-included below): none of the three start()
-		// tests reach it — all three reject before start() calls it (MongoDB/Redis/ClamAV
+		'src/index.mts:1-117',
+		// Lines 118-192 (createServer(), not re-included below): none of the start()
+		// failure-path tests reach it — each rejects before start() calls it (MongoDB/Redis/ClamAV
 		// mocks are rejected first). Only test/integration/index.itest.mts calls it, by
 		// booting the real server, and this run deliberately excludes that project (see the
 		// header of vitest.mutation.config.mts). Mutating it here would only produce
 		// NoCoverage noise, not signal.
-		// Lines 184-227: start()'s JSDoc plus the function body, whose Promise.all/try/catch
-		// IS exercised by the three failure-path tests above — kept in scope.
-		'src/index.mts:184-227'
-		// Lines 228-246 (the `if (process.env.NODE_ENV !== 'test')` entrypoint tail, not
+		// Lines 193-249: start()'s JSDoc plus the whole function body, whose Promise.all/try/catch
+		// IS exercised by the failure-path tests above — kept in scope.
+		'src/index.mts:193-249'
+		// Lines 250-269 (the `if (process.env.NODE_ENV !== 'test')` entrypoint tail, not
 		// re-included): already marked `/* v8 ignore start/stop */` in the source because it
 		// cannot run under the test process without killing the worker via process.exit.
 		// Every function it wires is tested directly above; the wiring itself has no branch
