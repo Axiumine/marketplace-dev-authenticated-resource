@@ -79,10 +79,10 @@ const seededKeys: string[] = []
  * The legal seat. GeoJSON order: [longitude, latitude]. Plain JS numbers, not Decimal128.
  */
 const ADDRESS_SEED = {
-	street: 'Via Test 1',
-	postalCode: '24031',
-	city: 'Almenno San Salvatore',
-	province: 'BG',
+	street: '1 Test Street',
+	postalCode: '01103',
+	city: 'Springfield',
+	province: 'MA',
 	position: { type: 'Point', coordinates: [9.57, 45.75] }
 }
 
@@ -98,7 +98,7 @@ const ADDRESS_SEED = {
  */
 async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 	const _id = new mongoose.Types.ObjectId()
-	const legalName = `Itest Pizzeria ${randomUUID()}`
+	const legalName = `Itest Boutique ${randomUUID()}`
 
 	await db()
 		.collection('company')
@@ -245,7 +245,7 @@ describe('GraphQL over HTTP', () => {
  * `$set` of a field the validator only recently gained.
  *
  * `vatNumber` and `certifiedEmail` carry plain global unique indexes — no `partialFilterExpression` — so a retired
- * company keeps its partita IVA occupied. That is a decision, not an oversight, and the last case here
+ * company keeps its VAT number occupied. That is a decision, not an oversight, and the last case here
  * pins it: the same VAT number cannot be registered again after the retirement.
  */
 describe('companyDel (soft delete against the real collection)', () => {
@@ -295,8 +295,8 @@ describe('companyDel (soft delete against the real collection)', () => {
 
 	// The consequence of leaving `vatNumber_unique` a plain global index. The index is what refuses the
 	// second registration, and it only exists on the collection — no unit test of `companyAdd` can
-	// reach it. `certifiedEmail` is deliberately different so the collision can only be the partita IVA.
-	it('leaves the partita IVA registered, so the same one cannot be added again', async () => {
+	// reach it. `certifiedEmail` is deliberately different so the collision can only be the VAT number.
+	it('leaves the VAT number registered, so the same one cannot be added again', async () => {
 		const session = await withSession()
 		const company = await seedCompany(session._id)
 		const vatNumber = company._id.toHexString().slice(-11)
@@ -305,7 +305,7 @@ describe('companyDel (soft delete against the real collection)', () => {
 			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			const { json } = await gql(
-				`mutation { companyAdd(company: { legalName: "Itest Ripescata", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", published: false, address: { street: "Via Test 1", postalCode: "24031", city: "Almenno San Salvatore", province: "BG", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
+				`mutation { companyAdd(company: { legalName: "Itest Refetched", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", published: false, address: { street: "1 Test Street", postalCode: "01103", city: "Springfield", province: "MA", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
 				session.headers
 			)
 

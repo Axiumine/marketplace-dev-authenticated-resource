@@ -15,7 +15,7 @@ export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' 
 /**
  * Saves a company, scoped to its owner.
  *
- * `$set` with the whole object rather than `updateOne(..., dati)`: the input is complete, so a field the
+ * `$set` with the whole object rather than `updateOne(..., data)`: the input is complete, so a field the
  * owner cleared has to be cleared in the document too, and a bare update would leave the stale value
  * behind for `taxCode` and `uniqueCode` — the two the client may omit.
  *

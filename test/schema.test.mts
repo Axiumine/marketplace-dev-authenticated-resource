@@ -62,15 +62,15 @@ describe('schema', () => {
 		expect(result.errors).toBeUndefined()
 	})
 
-	// `puntiVenditaShopOwnerTbl`, `puntoVenditaShopOwner` and `categoriePuntoVendita` were
-	// removed with the `puntoVendita` and `categoria` collections on 2026-08-04.
+	// The shop-ownership and shop-category link tables were removed with the shop and
+	// category collections on 2026-08-04.
 	// `companyItems` and `itemCategories` are the catalogue's read side, which is not that
 	// collection coming back: items hang off `company` directly, with no shop in between.
 	it('exposes the company and catalogue queries', () => {
 		expect(fieldsOf('QueriesApi')).toEqual(['companyItems', 'itemCategories', 'shopOwnerCompanies'])
 	})
 
-	// `puntoVenditaAdd`, `puntoVenditaDel` and `puntoVenditaDis` went the same way. The three
+	// The shop add/delete/disable mutations went the same way. The three
 	// `item*` are the owner's whole write surface on the catalogue — there is deliberately no
 	// `itemCategory*` here, because the taxonomy is written on the Admin tier alone.
 	it('exposes the company and item mutations', () => {
@@ -189,13 +189,6 @@ describe('object types', () => {
 		expect(typeOfField('GraphQLItemCategory', 'idParent')).toBe('ID')
 		expect(typeOfField('GraphQLItemCategory', 'position')).toBe('Int!')
 	})
-
-	// `GraphQLPuntoVendita` and `GraphQLPuntovenditaTbl` were removed with the `puntoVendita`
-	// collection on 2026-08-04 — nothing on this tier resolves an `company` through a shop any more.
-	it('does not carry the removed punto vendita types', () => {
-		expect(types.has('GraphQLPuntoVendita')).toBe(false)
-		expect(types.has('GraphQLPuntovenditaTbl')).toBe(false)
-	})
 })
 
 describe('input types', () => {
@@ -219,14 +212,5 @@ describe('input types', () => {
 	// Admin one. An input type here would be the first half of a write path nothing should have.
 	it('carries no category input', () => {
 		expect(types.has('GraphQLInputItemCategory')).toBe(false)
-	})
-
-	// The four punto-vendita-only inputs (contacts, openingHours, address, farina options) were removed
-	// with the collection they served on 2026-08-04.
-	it('does not carry the removed punto vendita inputs', () => {
-		expect(types.has('GraphQLInputPuntoVenditaContacts')).toBe(false)
-		expect(types.has('GraphQLInputPuntoVenditaOpeningHours')).toBe(false)
-		expect(types.has('GraphQLInputPuntoVenditaAddress')).toBe(false)
-		expect(types.has('GraphQLInputOpzFarine')).toBe(false)
 	})
 })

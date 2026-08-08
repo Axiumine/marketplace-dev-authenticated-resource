@@ -37,9 +37,9 @@ const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwner
 const item = {
 	idCompany,
 	idCategory,
-	name: 'Focaccia',
+	name: 'Sneaker',
 	description: 'Baked this morning',
-	slug: 'focaccia',
+	slug: 'sneaker',
 	published: true
 }
 

@@ -7,7 +7,7 @@ import { trusted } from 'mongoose'
 /**
  * The signed-in owner's live companies — what the shop form picks from.
  *
- * Owner and liveness, the same pair the punto vendita queries filter on. The `deleted` clause matters
+ * Owner and liveness, the same pair every owner-scoped query filters on. The `deleted` clause matters
  * twice over: this query draws the companies list *and* the `<select>` the shop form offers, so a
  * retired company left in would be pickable and then refused by `throwIfShopOwnerDontOwnCompany`
  * with a 403 the owner cannot act on. trusted(): `sanitizeFilter` is on globally, so a bare
