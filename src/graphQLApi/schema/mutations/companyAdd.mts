@@ -15,8 +15,8 @@ interface IArgs {
 /**
  * Creates a company for the signed-in owner.
  *
- * New with 20260803000100: the company used to be typed into `puntoVenditaAdd` and stored inside the
- * shop, which made the second pizzeria of the same chain collide on the unique partita IVA. It is
+ * New with 20260803000100: the company used to be typed into the shop-add mutation and stored inside
+ * the shop, which made the second shop of the same chain collide on the unique VAT number. It is
  * created once here and then referenced by id.
  *
  * The new `_id` is the return value — unlike the operator tier's `Boolean`, because the owner's own flow
@@ -37,7 +37,7 @@ export const companyAdd = {
 		}
 
 		// `return await`, not `return`: without the await the promise escapes the try, so the catch
-		// below can never run and a duplicate partita IVA would surface as an unhandled rejection
+		// below can never run and a duplicate VAT number would surface as an unhandled rejection
 		// instead of the 409 tryCatchRethrow makes of it.
 		try {
 			return await Company.create(newCompany)

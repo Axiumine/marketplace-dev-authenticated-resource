@@ -30,12 +30,12 @@ function counting(found: number) {
 }
 
 const data = {
-	legalName: 'Pizzeria Test S.r.l.',
+	legalName: 'Test Boutique Ltd',
 	vatNumber: '01234567890',
-	contactPerson: 'Mario Rossi',
-	administrator: 'Mario Rossi',
-	certifiedEmail: 'pizzeria@pec.it',
-	address: { via: 'via Roma 1' },
+	contactPerson: 'Mark Rivers',
+	administrator: 'Mark Rivers',
+	certifiedEmail: 'certified@boutique.test',
+	address: { street: '1 main street' },
 	registryExtract: 'registryExtract.pdf'
 } as never
 
@@ -97,7 +97,7 @@ describe('funCompanyUpdate', () => {
 })
 
 describe('funCompanyDelete', () => {
-	// No referential check any more: `puntoVendita` was the only collection that could point at an
+	// No referential check any more: the old shop collection was the only thing that could point at an
 	// `company`, and it was removed from the platform on 2026-08-04 along with the `countDocuments`
 	// guard that used to read it here. Retiring a company is now a straight stamp.
 	it('stamps deleted on the company, scoped to its owner, and touches nothing else', async () => {

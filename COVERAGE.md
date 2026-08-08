@@ -93,9 +93,9 @@ to all three, not that a mock returned the expected value.
 Alongside its own Redis access sessions, it seeds a real `company` document with the raw driver
 (checked by the collection's own `$jsonSchema`, not the Mongoose model) and drives
 `shopOwnerCompanies`, `companyAdd` and `companyDel` for real over HTTP, dropping every document
-it created in `afterAll`. This is new since the `puntoVendita`/`categoria` removal (2026-08-04):
-the two collections the suite used to read only (`puntiVenditaShopOwnerTbl`,
-`categoriePuntoVendita`) are gone, `company` is the sole survivor, and a single collection was
+it created in `afterAll`. This is new since the old shop and category collections were removed
+(2026-08-04): the two collections the suite used to read only (the shop-ownership link table and
+the shop-category link table) are gone, `company` is the sole survivor, and a single collection was
 small enough a target to seed and mutate for real. The unit project still carries the error
 paths (duplicate `vatNumber`, a driver failure, an ownership rejection) that would mean corrupting a
 real index or forging a rejection to reach through HTTP; `tryCatchRethrow` is left unmocked
@@ -175,23 +175,22 @@ No `// Stryker disable` directive exists anywhere in `src/` — every mutant Str
 including every static one, was killable with a strong-enough assertion, not an equivalence
 argument.
 
-⚠️ **The 13 food collections (`pizza`, `bevanda`, …) and `costiConsegna`, plus the resolvers, GraphQL
-types and unit/integration tests that served only them, were removed from this service in one
+⚠️ **The domain-specific product collections and the delivery-cost collection, plus the resolvers,
+GraphQL types and unit/integration tests that served only them, were removed from this service in one
 piece of work** (see *What the port deleted or fixed* below, and the parent workspace `CLAUDE.md`
 for the product decision). The mutant and coverage figures that used to be pinned in this file were
 tied to that code and are stale now that it is gone — the numbers above describe the shape of the
 gates, not a snapshot to compare against. Re-run `yarn test:cov` and `yarn test:mutation` for the
 current baseline; do not restore the old counts.
 
-⚠️ **`puntoVendita` and `categoria` went the same way, in a second cut on the same day.** This was
-the service hit hardest of the seven: of 4 queries and 6 mutations only the 3 `company` mutations
-and `shopOwnerCompanies` survived. Gone with the two collections: `categoriePuntoVendita`,
-`puntiVenditaShopOwnerTbl`, `puntoVenditaShopOwner`, `puntoVenditaAdd`, `puntoVenditaDel`,
-`puntoVenditaDis`, `GraphQLPuntoVendita`, `GraphQLPuntovenditaTbl`, the four punto-vendita-only
-inputs (contacts, openingHours, address, farina options) and every test that exercised any of them.
-`test/schema.test.mts` now asserts their absence by name rather than staying silent about it.
-Same consequence as the first cut: the coverage and mutation figures below predate this removal
-too — re-run rather than trust the numbers.
+⚠️ **The old shop and category collections went the same way, in a second cut on the same day.**
+This was the service hit hardest of the seven: of 4 queries and 6 mutations only the 3 `company`
+mutations and `shopOwnerCompanies` survived. Gone with the two collections: the shop-category link
+table, the shop-ownership link table, the shop add/delete/disable mutations, the shop GraphQL
+types, the four shop-only inputs (contacts, openingHours, address, a product-options type) and
+every test that exercised any of them. `test/schema.test.mts` now asserts their absence by name
+rather than staying silent about it. Same consequence as the first cut: the coverage and mutation
+figures below predate this removal too — re-run rather than trust the numbers.
 
 ### Writing tests that kill
 
@@ -206,26 +205,26 @@ field's `type` to `undefined`, which a bare `Object.keys(fields)` name-list chec
 
 Reaching 100% (before the catalog was removed) surfaced code that could not be covered because it
 could not run, and — through the integration project — one bug that broke the whole shop-owner
-read path. Recorded here so the changes are not mistaken for gratuitous edits. Both `puntoVendita`
-and `categoria` are gone now too (see above), so every entry below is history: kept because it
-explains a decision, a pattern, or a defect, not because the code it names is still on disk.
+read path. Recorded here so the changes are not mistaken for gratuitous edits. The old shop and
+category collections are gone now too (see above), so every entry below is history: kept because
+it explains a decision, a pattern, or a defect, not because the code it names is still on disk.
 
 - **`sanitizeFilter` vs `$exists` — the real one.** `MongoDBConnect` (koa-utils) sets
   `mongoose.set('sanitizeFilter', true)` **globally**, so a bare `$`-operator object inside a
-  filter is stripped and read as a literal value. `puntiVenditaShopOwnerTbl` and
-  `puntoVenditaShopOwner` (both since deleted with `puntoVendita` itself) both passed
+  filter is stripped and read as a literal value. The shop-ownership link table's two files
+  (both since deleted with the shop collection itself) both passed
   `{ deleted: { $exists: false } }` unwrapped, and the first integration query answered:
 
   ```
-  Cast to date failed for value "{ '$exists': false }" (type Object) at path "deleted" for model "PuntoVendita"
+  Cast to date failed for value "{ '$exists': false }" (type Object) at path "deleted" for model "Shop"
   ```
 
   Fixed by wrapping in mongoose's `trusted({ $exists: false })` in both files, which is what the
   admin resource service already did. The pattern outlives the two files it was found in:
   `shopOwnerCompanies` filters the same way and its unit assertion compares against
   `trusted(...)` too, so a regression on the survivor still fails the suite.
-- `src/graphQLApi/schema/mutations/puntoVenditaUpdate.mts` — **deleted**, twice over: first as an
-  empty file with no export and no importer, then for good along with the rest of `puntoVendita`.
+- The shop-update mutation file — **deleted**, twice over: first as an
+  empty file with no export and no importer, then for good along with the rest of the shop collection.
 - `authorizationAuthenticatedResourceHandler` — the `x-introspectioncode` bypass dereferenced a
   missing `Authorization` header (`authorization!.startsWith(...)`) and threw a `TypeError`,
   so it could never succeed and the `if (!introspection)` guard below it was unreachable.
@@ -235,11 +234,11 @@ explains a decision, a pattern, or a defect, not because the code it names is st
   inside a `try` means the promise escapes before the `catch` can see it, so a write failure
   surfaced as an unhandled rejection instead of a GraphQL error. All now `return await`.
 
-Two items used to sit here as **documented but deliberately left alone** — `funPuntovenditaDisabled`'s
-`disable`/`disabled` key mismatch (a data-migration decision, not a test-porting one) and
-`categoriePuntoVendita`'s harmless `GraphQLPuntoVendita`/`Categoria` type mismatch. Both are moot
-now: the functions, the collections and the mismatch all went together in the `puntoVendita`/
-`categoria` removal above. Nothing replaces the entries — there is no equivalent decision pending
+Two items used to sit here as **documented but deliberately left alone** — the shop-disabled
+function's `disable`/`disabled` key mismatch (a data-migration decision, not a test-porting one) and
+the shop-category link table's harmless GraphQL type mismatch. Both are moot
+now: the functions, the collections and the mismatch all went together in the shop-and-category
+removal above. Nothing replaces the entries — there is no equivalent decision pending
 on `company`.
 
 ## Running it

@@ -6,9 +6,9 @@ import { GraphQLBoolean, GraphQLInputObjectType, GraphQLNonNull, GraphQLString }
  * The company as the owner fills it in — every field of `GraphQLCompany` except the two the server sets:
  * `_id`, and `idShopOwner`, which is the session's and never an argument on this tier.
  *
- * Replaces `GraphQLInputPuntoVenditaCompany`, which was the same fields nested inside `puntoVenditaAdd`
- * and had to be retyped for every shop of the same chain. It gains `taxCode` and `address`, which the
- * embedded sub-document never carried.
+ * Replaces the company fields that used to be nested inside the old shop-add mutation, before `company`
+ * had its own collection, and had to be retyped for every shop of the same chain. It gains `taxCode`
+ * and `address`, which the embedded sub-document never carried.
  */
 export const GraphQLInputCompany = new GraphQLInputObjectType({
 	name: 'GraphQLInputCompany',

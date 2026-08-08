@@ -3,7 +3,8 @@ import { GraphQLPositionFrag } from '@thedoctorweb_agency/marketplace-common/sch
 import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLString } from 'graphql'
 
 /**
- * The company behind one or more punti vendita, its own collection since 20260803000000.
+ * The company, its own collection since 20260803000000. A shop IS a `company`; there is no shop
+ * collection and will not be one.
  *
  * `idShopOwner` is exposed even though every read path on this tier already filters by the session's
  * owner: the frontend keys its cache on it, and a field the server refuses to say is a field the client

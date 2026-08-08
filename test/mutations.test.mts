@@ -48,7 +48,7 @@ beforeEach(() => {
 })
 
 describe('companyAdd', () => {
-	const args = { company: { legalName: 'Pizzeria Test S.r.l.', vatNumber: '01234567890' } }
+	const args = { company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
 
 	// The owner comes from the session, never from the input. Unlike every other write here there is
 	// no ownership guard to run first — the company does not exist yet, so `idShopOwner` is what
@@ -62,10 +62,10 @@ describe('companyAdd', () => {
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 	})
 
-	// `vatNumber_unique` is global, so a partita IVA already used by another owner's company fails here —
+	// `vatNumber_unique` is global, so a VAT number already used by another owner's company fails here —
 	// and has to reach this one as a 409, not as the 500 every other write failure becomes. The code
 	// sits under `errorResponse` because that is where `throwIfMongoErr` reads it, not at the top level.
-	it('turns a duplicate partita IVA into a 409', async () => {
+	it('turns a duplicate VAT number into a 409', async () => {
 		companyCreate.mockRejectedValueOnce(
 			Object.assign(new Error('E11000 duplicate key error collection: company index: vatNumber_unique'), {
 				errorResponse: { code: 11000 }
@@ -88,7 +88,7 @@ describe('companyAdd', () => {
 })
 
 describe('companyUpdate', () => {
-	const args = { _id: idCompany, company: { legalName: 'Pizzeria Test S.r.l.', vatNumber: '01234567890' } }
+	const args = { _id: idCompany, company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
 
 	it('checks ownership then delegates the save and answers true', async () => {
 		await expect(run(companyUpdate, args)).resolves.toBe(true)

@@ -54,9 +54,9 @@ function expectOwnerScopedWrite() {
 const data = {
 	idCompany,
 	idCategory,
-	name: 'Focaccia',
+	name: 'Sneaker',
 	description: 'Baked this morning',
-	slug: 'focaccia',
+	slug: 'sneaker',
 	published: true
 } as never
 
