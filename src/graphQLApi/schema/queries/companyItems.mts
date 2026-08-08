@@ -1,7 +1,7 @@
+import { Item } from '@axiumine/marketplace-common/models/MongoDB/Item'
 import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { throwIfShopOwnerDontOwnCompany } from '@lib/company/throwIfShopOwnerDontOwnCompany.mjs'
 import { GraphQLItem } from '@ptypes/GraphQLItem.mjs'
-import { Item } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Item'
 import { GraphQLID, GraphQLList, GraphQLNonNull } from 'graphql'
 import { trusted, Types } from 'mongoose'
 

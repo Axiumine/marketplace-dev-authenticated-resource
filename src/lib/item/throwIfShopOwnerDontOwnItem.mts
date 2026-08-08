@@ -1,6 +1,6 @@
 import { throwForbiddenError } from '@axiumine/koa-utils/graphQL/throw/throwForbiddenError'
+import { Item } from '@axiumine/marketplace-common/models/MongoDB/Item'
 import { shopOwnerCompanyIds } from '@lib/company/shopOwnerCompanyIds.mjs'
-import { Item } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Item'
 import { trusted, Types } from 'mongoose'
 
 /**

@@ -1,5 +1,5 @@
-import { GraphQLAddressFrag } from '@thedoctorweb_agency/marketplace-common/schema/types/fragments/GraphQLAddressFrag'
-import { GraphQLPositionFrag } from '@thedoctorweb_agency/marketplace-common/schema/types/fragments/GraphQLPositionFrag'
+import { GraphQLAddressFrag } from '@axiumine/marketplace-common/schema/types/fragments/GraphQLAddressFrag'
+import { GraphQLPositionFrag } from '@axiumine/marketplace-common/schema/types/fragments/GraphQLPositionFrag'
 import { GraphQLBoolean, GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
 
 /**

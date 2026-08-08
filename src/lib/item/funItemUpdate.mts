@@ -1,7 +1,7 @@
 import { throwInternalError } from '@axiumine/koa-utils/graphQL/throw/throwInternalError'
+import { Item } from '@axiumine/marketplace-common/models/MongoDB/Item'
+import { IItemSchema } from '@axiumine/marketplace-common/models/MongoDBInterfaces/IItemSchema'
 import { shopOwnerCompanyIds } from '@lib/company/shopOwnerCompanyIds.mjs'
-import { Item } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Item'
-import { IItemSchema } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/IItemSchema'
 import { trusted, Types } from 'mongoose'
 
 /**

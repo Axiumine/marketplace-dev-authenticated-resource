@@ -1,6 +1,6 @@
+import { Company } from '@axiumine/marketplace-common/models/MongoDB/Company'
 import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { GraphQLCompany } from '@ptypes/GraphQLCompany.mjs'
-import { Company } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Company'
 import { GraphQLList, GraphQLNonNull } from 'graphql'
 import { trusted } from 'mongoose'
 

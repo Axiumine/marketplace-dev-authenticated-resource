@@ -1,5 +1,5 @@
 import { throwInternalError } from '@axiumine/koa-utils/graphQL/throw/throwInternalError'
-import { Company } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Company'
+import { Company } from '@axiumine/marketplace-common/models/MongoDB/Company'
 import { Types } from 'mongoose'
 
 /**

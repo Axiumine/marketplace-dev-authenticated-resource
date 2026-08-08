@@ -8,7 +8,7 @@ vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.f
 // ⚠️ No `deleteOne` on the mock, deliberately. `funCompanyDelete` soft-deletes, so a regression to the
 // old removal call has to fail here — with a mock that carried it it would pass every assertion below
 // and only surface against a real database.
-vi.mock('@thedoctorweb_agency/marketplace-common/models/MongoDB/Company', () => ({
+vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
 	Company: {
 		countDocuments: companyCountDocuments,
 		updateOne: companyUpdateOne

@@ -1,6 +1,6 @@
 import { throwInternalError } from '@axiumine/koa-utils/graphQL/throw/throwInternalError'
-import { Company } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Company'
-import { ICompanySchema } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/ICompanySchema'
+import { Company } from '@axiumine/marketplace-common/models/MongoDB/Company'
+import { ICompanySchema } from '@axiumine/marketplace-common/models/MongoDBInterfaces/ICompanySchema'
 import { Types } from 'mongoose'
 
 /**

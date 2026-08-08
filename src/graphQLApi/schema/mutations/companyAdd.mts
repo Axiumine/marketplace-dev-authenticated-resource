@@ -1,10 +1,10 @@
 import { OnlyIdType } from '@axiumine/koa-utils/graphQL/schema/types/OnlyIdType'
 import { tryCatchRethrow } from '@axiumine/koa-utils/lib/tryCatchRethrow'
+import { Company } from '@axiumine/marketplace-common/models/MongoDB/Company'
+import { ICompanySchema } from '@axiumine/marketplace-common/models/MongoDBInterfaces/ICompanySchema'
 import { GraphQLInputCompany } from '@GraphQLInput/GraphQLInputCompany.mjs'
 import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { ICompanyUpdate } from '@lib/company/funCompanyUpdate.mjs'
-import { Company } from '@thedoctorweb_agency/marketplace-common/models/MongoDB/Company'
-import { ICompanySchema } from '@thedoctorweb_agency/marketplace-common/models/MongoDBInterfaces/ICompanySchema'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
 import { Types } from 'mongoose'
 
