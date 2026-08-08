@@ -12,7 +12,7 @@ interface IArgs {
 /**
  * Retires a company of the signed-in owner.
  *
- * A soft delete: the row keeps its place and gains a `deleted` instant, so every read path drops it and
+ * A soft delete: the company keeps its place and gains a `deleted` instant, so every read path drops it and
  * nothing on the platform can name it again. The ownership guard runs first and filters `deleted` too,
  * which is why a second call on the same company answers 403 rather than repeating the stamp.
  */

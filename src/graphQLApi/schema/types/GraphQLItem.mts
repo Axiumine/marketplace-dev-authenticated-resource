@@ -6,7 +6,7 @@ import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType } from 'gr
  *
  * `GraphQLItemFrag` carries the three fields every tier renders; `published` is added here because
  * this is a tier that can see a draft. The public tier will spread the same fragment and leave the
- * flag out, since a row it can return is published by definition.
+ * flag out, since an item it can return is published by definition.
  *
  * `idCompany` is exposed even though every read path here already filters by a company the session's
  * owner holds — the same argument `GraphQLCompany.idShopOwner` makes: the frontend keys its cache on

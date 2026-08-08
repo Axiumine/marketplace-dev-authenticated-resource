@@ -76,7 +76,7 @@ describe('companyItems', () => {
 
 		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
 		// Both drafts and published items: this is the owner's own management list and `published` is
-		// what the row renders. Only the public tier filters on it — an exact key set is what keeps a
+		// what the listing renders. Only the public tier filters on it — an exact key set is what keeps a
 		// `published: true` from being "tidied" in here, which would hide every draft from its author.
 		const [filter] = itemFind.mock.calls[0]
 		expect(filter.idCompany).toBe(idCompany)

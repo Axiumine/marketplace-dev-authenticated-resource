@@ -74,7 +74,7 @@ describe('throwIfShopOwnerDontOwnCompany', () => {
 
 describe('funCompanyUpdate', () => {
 	// `idShopOwner` is in the filter and not in the update: a company cannot change hands by saving
-	// its card, and a filter on `_id` alone would let one owner overwrite another's row.
+	// its card, and a filter on `_id` alone would let one owner overwrite another's company.
 	it('saves the whole card, scoped to its owner', async () => {
 		await expect(funCompanyUpdate(companyId, shopOwnerId, data)).resolves.toBeUndefined()
 
@@ -115,7 +115,7 @@ describe('funCompanyDelete', () => {
 	})
 
 	// `matchedCount`, not `modifiedCount`: the ownership guard already ran, so a filter matching
-	// nothing means the row went away between the two queries, and that is the 500. Stamping a company
+	// nothing means the company went away between the two queries, and that is the 500. Stamping a company
 	// that already carries `deleted` matches one document and modifies none — still a success.
 	it('raises a 500 when the filter matched nothing', async () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })

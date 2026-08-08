@@ -131,8 +131,8 @@ describe('throwIfShopOwnerDontOwnItem', () => {
 })
 
 describe('throwIfItemCategoryMissing', () => {
-	// MongoDB has no foreign keys, so `item.idCategory` can name a category that never existed. This is
-	// the only thing standing between a typo in a client and an item no listing can reach.
+	// Nothing enforces the reference, so `item.idCategory` can name a category that never existed.
+	// This is the only thing standing between a typo in a client and an item no listing can reach.
 	it('passes when the category exists and is live', async () => {
 		await expect(throwIfItemCategoryMissing(idCategory)).resolves.toBeUndefined()
 
@@ -161,7 +161,7 @@ describe('throwIfItemCategoryMissing', () => {
 })
 
 describe('funItemUpdate', () => {
-	// ⚠️ The `idCompany` clause reads the STORED row, not the update — defence in depth behind
+	// ⚠️ The `idCompany` clause reads the STORED item, not the update — defence in depth behind
 	// `throwIfShopOwnerDontOwnItem`, refusing the write a second time if the item moved out from under
 	// the session in between. The destination in `data` is the resolver's to check: a filter cannot
 	// check a value it is about to write.

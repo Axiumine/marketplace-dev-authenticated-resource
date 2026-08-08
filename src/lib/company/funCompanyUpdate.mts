@@ -20,7 +20,7 @@ export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' 
  * behind for `taxCode` and `uniqueCode` — the two the client may omit.
  *
  * `idShopOwner` is in the filter, not in the update. A company cannot change hands by saving its
- * card, and a filter that matched on `_id` alone would let one owner overwrite another's row.
+ * card, and a filter that matched on `_id` alone would let one owner overwrite another's company.
  *
  * `deleted` is not in the filter and does not need to be: `throwIfShopOwnerDontOwnCompany` runs
  * ahead of every call and already refuses a retired company, and the field is outside `ICompanyUpdate`

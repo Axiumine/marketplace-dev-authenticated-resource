@@ -12,7 +12,7 @@ interface IArgs {
 /**
  * Withdraws an item of the signed-in owner.
  *
- * A soft delete, like `companyDel`: the row keeps its place and gains a `deleted` instant, so every
+ * A soft delete, like `companyDel`: the item keeps its place and gains a `deleted` instant, so every
  * read path drops it and its slug stays occupied inside the shop. The ownership guard runs first and
  * filters `deleted` too, which is why a second call on the same item answers 403 rather than
  * repeating the stamp.

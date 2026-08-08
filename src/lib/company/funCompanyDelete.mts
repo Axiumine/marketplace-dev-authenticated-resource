@@ -3,7 +3,7 @@ import { Company } from '@axiumine/marketplace-common/models/MongoDB/Company'
 import { Types } from 'mongoose'
 
 /**
- * Retires a company. A soft delete: the row stays and gains the instant it was retired.
+ * Retires a company. A soft delete: the document stays and gains the instant it was retired.
  * `Date.now()` is a number and the schema path is a `Date` — mongoose casts it.
  *
  * ⚠️ The VAT number stays registered. `vatNumber_unique` and `certifiedEmail_unique` are plain global indexes with no
