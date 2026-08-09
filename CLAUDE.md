@@ -2,7 +2,7 @@
 
 Backend svc 4 of 9. ShopOwner tier, resource concern. Port 4026.
 
-**Read parent first** — `/media/nvme/websites/fullstack-marketplace-blueprint/CLAUDE.md`
+**Read parent first** — `../../../CLAUDE.md`
 (<https://github.com/Axiumine/fullstack-marketplace-blueprint> if you are reading this on GitHub).
 Tier/concern split, port table, terminology, auth model live there. Not here.
 
