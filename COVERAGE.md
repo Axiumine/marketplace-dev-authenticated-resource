@@ -177,7 +177,7 @@ argument.
 
 ⚠️ **The domain-specific product collections and the delivery-cost collection, plus the resolvers,
 GraphQL types and unit/integration tests that served only them, were removed from this service in one
-piece of work** (see *What the port deleted or fixed* below, and the parent workspace `CLAUDE.md`
+piece of work** (see *What the port deleted or fixed* below, and the parent workspace [`CLAUDE.md`](./CLAUDE.md)
 for the product decision). The mutant and coverage figures that used to be pinned in this file were
 tied to that code and are stale now that it is gone — the numbers above describe the shape of the
 gates, not a snapshot to compare against. Re-run `yarn test:cov` and `yarn test:mutation` for the
