@@ -102,8 +102,12 @@ SAMESITE_COOKIE=lax
 HIT_STATS=false
 INTROSPECTION_CODE='xxx'
 
-KEYGRIP_KEY_1="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-KEYGRIP_KEY_2="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+# No KEYGRIP_KEY_* here on purpose. This tier authenticates over a bearer header checked against
+# Redis and signs no cookie, so REQUIRED_ENV_VARS in src/index.mts carries neither key — only the
+# five services that mint or verify the refresh cookie do (the four *-authorization services and
+# *-authenticated-logout). Adding them back puts a secret on a machine that has no use for it and
+# widens the cross-repo agreement surface described in docs/workflow.md §Environment files.
+
 # Optional: an empty or missing DSN leaves the Sentry SDK inert and the service still boots.
 # Deliberately absent from REQUIRED_ENV_VARS in src/index.mts — do not add it back.
 DSN="https://xxxxxxxxxxxxxx@bugsink.lan/1"
