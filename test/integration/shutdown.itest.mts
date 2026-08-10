@@ -1,8 +1,10 @@
+import { randomUUID } from 'node:crypto'
 import type { AddressInfo } from 'node:net'
 import net from 'node:net'
 
 import { MongoDBConnect, MongoDBDisconnect } from '@axiumine/koa-utils/dataSources/MongoDB'
 import { redisClient, RedisConnect } from '@axiumine/koa-utils/dataSources/Redis'
+import { TIER } from '@axiumine/marketplace-common/others/Tier'
 import mongoose from 'mongoose'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 
@@ -63,15 +65,22 @@ describe('production hardening actually applies to a real server', () => {
 		const realNodeEnv = process.env.NODE_ENV
 		process.env.NODE_ENV = 'production'
 
+		// A real access session, written the way a login writes one: the handler reads this hash,
+		// asserts the tier on it and builds ctx.state.user from it, with no MongoDB round-trip.
+		const accessToken = `access:${randomUUID()}`
+		const accessKey = `${process.env.REDIS_KEY}${accessToken}`
+
 		let server: Awaited<ReturnType<typeof createServer>> | undefined
 		try {
+			await redisClient.hSet(accessKey, { _id: new mongoose.Types.ObjectId().toHexString(), tier: TIER.shopOwner })
+
 			server = await createServer()
 			await new Promise<void>((resolve) => server!.httpServer.listen({ port: 0 }, () => resolve()))
 			const { port } = server.httpServer.address() as AddressInfo
 
 			const res = await fetch(`http://127.0.0.1:${port}${ENDPOINT}`, {
 				method: 'POST',
-				headers: { 'content-type': 'application/json', 'x-introspectioncode': process.env.INTROSPECTION_CODE! },
+				headers: { 'content-type': 'application/json', authorization: `Bearer ${accessToken}` },
 				body: JSON.stringify({ query: '{ __schema { queryType { name } } }' })
 			})
 			const json = (await res.json()) as { data?: unknown; errors?: Array<{ message: string }> }
@@ -80,6 +89,7 @@ describe('production hardening actually applies to a real server', () => {
 			expect(json.errors?.[0]?.message).toMatch(/introspection/i)
 		} finally {
 			process.env.NODE_ENV = realNodeEnv
+			await redisClient.del(accessKey)
 			if (server) {
 				await server.apolloServer.stop()
 				await new Promise<void>((resolve) => server!.httpServer.close(() => resolve()))
