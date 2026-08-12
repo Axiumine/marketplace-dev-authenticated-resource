@@ -130,6 +130,13 @@ export default [
 				// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
 				// is BC-03's approval gate itself: a service that could write it could approve its own account.
 				//
+				// ⚠️ The two authorization services carry a narrower `waitApprov` rule than this one — a write
+				// ban only, scoped to their `src/**` — because `checkShopOwnerApproval` runs at login and on
+				// every refresh, and a rule refusing the read would refuse the gate. Nothing changes here: by
+				// the time a request reaches this service its session has already been through that gate, so a
+				// resource resolver reading the flag would be re-deciding a question already answered, on a
+				// field it has no other business with. Keep all four shapes.
+				//
 				// The list and the whole argument live on `OPERATOR_ONLY_FIELDS_SHOP_OWNER` in
 				// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
 				// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
@@ -153,7 +160,7 @@ export default [
 					selector:
 						"Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
 					message:
-						"E01-S10: `shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and login deliberately does not read it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+						"E01-S10: `shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and a resource resolver has no reason to read it either: checkShopOwnerApproval already ran at login and runs again on every refresh, so a session that reached this service is approved by construction. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER in marketplace-common."
 				}
 			]
 		}
