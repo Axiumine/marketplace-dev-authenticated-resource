@@ -90,16 +90,18 @@ MAX_VIDEO_MB=100
 
 # No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
 # @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
-REDIRECT_DOMAIN=https://xxxx.tdweb.lan
-
-# Required by checkRequiredEnv() in src/index.mts — the service refuses to start without them.
-EMAIL_FROM=noreply@xxxx.tdweb.lan
-DEV_TEAM_EMAIL=dev@xxxx.tdweb.lan
-PLATFORM_NAME=Marketplace
-# 'lax' | 'strict' | 'none' — SameSite attribute of the refresh cookie.
-SAMESITE_COOKIE=lax
-
-HIT_STATS=false
+#
+# ⚠️ Six names stood here and are gone, E18-S13, out of this file and out of REQUIRED_ENV_VARS in the
+# same commit. EMAIL_FROM, PLATFORM_NAME and DEV_TEAM_EMAIL are read only by SocketLabsLib — the first
+# two in its constructor, the third in alertDevTeam() and sendEmailPostReported() — and this service
+# imports no part of it. REDIRECT_DOMAIN, HIT_STATS and SAMESITE_COOKIE are read by nothing anywhere:
+# no `src/` file in any of the nine services, no `dist/` file in either @axiumine package.
+#
+# SAMESITE_COOKIE is the one worth naming twice, because the comment above it here claimed it set the
+# refresh cookie's SameSite attribute and it never did: that attribute is the literal
+# `sameSite: 'Strict'` in @axiumine/koa-utils/dist/lib/tokenOptions.mjs, which reads no variable, and
+# the `Secure` half is the edge's rewrite (ADR-034). The value `lax` sat in every environment saying
+# the cookie was laxer than it is. Do not add any of the six back.
 # ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
 # `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
 # refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it

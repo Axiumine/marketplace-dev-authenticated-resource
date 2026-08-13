@@ -48,13 +48,18 @@ export const REQUIRED_ENV_VARS = [
 	// `SocketLabsLib` reads them, this service imports no part of it, and every mail the platform sends
 	// is sent by `public-resource` — so the pair was a mail credential required at boot by a service that
 	// cannot send mail. E18-S10; the dependency itself left `package.json` in the same commit.
-	'REDIRECT_DOMAIN',
-	'EMAIL_FROM',
-	'DEV_TEAM_EMAIL',
-	'HIT_STATS',
-	'INTROSPECTION_CODE',
-	'PLATFORM_NAME',
-	'SAMESITE_COOKIE'
+	//
+	// ⚠️ Six more left this list for the same reason, E18-S13. `EMAIL_FROM`, `PLATFORM_NAME` and
+	// `DEV_TEAM_EMAIL` are read only by `SocketLabsLib` — the first two in its constructor, the third in
+	// `alertDevTeam()` and `sendEmailPostReported()`, which no service on this platform calls. And
+	// `SAMESITE_COOKIE`, `HIT_STATS` and `REDIRECT_DOMAIN` are read by nothing anywhere: no `src/` file in
+	// any of the nine services, no `dist/` in either `@axiumine` package.
+	// `SAMESITE_COOKIE` is the one that looks load-bearing and is not — the cookie policy it appears to
+	// name is the literal `sameSite: 'Strict'` in `@axiumine/koa-utils/dist/lib/tokenOptions.mjs`, which
+	// reads no variable, and the edge's `Secure` rewrite (ADR-034) is nginx config. A variable required at
+	// boot and read by nothing teaches operators that this list is noise, which is the one thing it cannot
+	// afford to be.
+	'INTROSPECTION_CODE'
 ]
 
 /**

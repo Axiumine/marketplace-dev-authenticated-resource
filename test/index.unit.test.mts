@@ -55,7 +55,7 @@ describe('checkRequiredEnv', () => {
 	 * a `toContain` passes an addition, so neither notices the change. The order is asserted too — the
 	 * boot names the *first* missing variable, and that is the one an operator goes looking for. E18-S03.
 	 */
-	it('requires exactly these 21 variables, in this order', () => {
+	it('requires exactly these 15 variables, in this order', () => {
 		expect(REQUIRED_ENV_VARS).toStrictEqual([
 			'PORT',
 			'REDIS_IS_CLUSTER',
@@ -71,13 +71,7 @@ describe('checkRequiredEnv', () => {
 			'MONGODB_URI',
 			'CSFLE_MASTER_KEY_PATH',
 			'CSFLE_KEY_VAULT_NAMESPACE',
-			'REDIRECT_DOMAIN',
-			'EMAIL_FROM',
-			'DEV_TEAM_EMAIL',
-			'HIT_STATS',
-			'INTROSPECTION_CODE',
-			'PLATFORM_NAME',
-			'SAMESITE_COOKIE'
+			'INTROSPECTION_CODE'
 		])
 	})
 
@@ -94,12 +88,14 @@ describe('checkRequiredEnv', () => {
 
 	// The *last* entry, so a mutant that stops the loop short is caught and not just one that skips
 	// index 0. It used to be DSN, which is no longer required at all: Sentry is optional, and an
-	// unset DSN leaves the SDK inert rather than stopping the service from serving.
+	// unset DSN leaves the SDK inert rather than stopping the service from serving. Then it was
+	// SAMESITE_COOKIE, which E18-S13 removed as read by nothing — the name has to be the one the list
+	// ends with today, so this assertion moves every time the tail of the list does.
 	it('names a variable missing further down the list', () => {
 		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
-		delete env.SAMESITE_COOKIE
+		delete env.INTROSPECTION_CODE
 
-		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: SAMESITE_COOKIE')
+		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: INTROSPECTION_CODE')
 	})
 
 	// Named as literals, because none of the three tests above can see WHICH names the list carries:

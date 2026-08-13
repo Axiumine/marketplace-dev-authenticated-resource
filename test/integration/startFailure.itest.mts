@@ -56,21 +56,25 @@ describe('start() when MongoDB refuses the connection', () => {
 	 * to Sentry, and never reaches disconnectAllDatabases — it propagates straight out of start()
 	 * and the process dies without touching a datasource. Driven through start() rather than by
 	 * calling checkRequiredEnv() directly, so it is that ordering being tested and not just the
-	 * guard's own loop. PLATFORM_NAME is picked because nothing else in this suite's setup reads or
-	 * overrides it — REDIS_KEY, PORT, MONGODB_URI and INTROSPECTION_CODE are all pinned by
-	 * vitest.config.mts and deleting one of those would fight the test harness itself.
+	 * guard's own loop. It used to delete PLATFORM_NAME, which nothing in this suite's setup touched —
+	 * until E18-S13 took that variable out of REQUIRED_ENV_VARS as read by nothing, at which point the
+	 * boot no longer minded its absence and this test failed on the real service reaching MongoDB.
+	 * INTROSPECTION_CODE replaces it and is the better choice anyway: it is the LAST entry of the list,
+	 * so a mutant that stops the loop one short fails here as well as in the unit suite. It is pinned by
+	 * vitest.config.mts to a literal, so the restore in `finally` puts back exactly what was there — and
+	 * the delete window closes before anything else in the process can read it.
 	 */
 	it('refuses to boot at all, and connects nothing, when a required variable is missing', async () => {
-		const realKey = process.env.PLATFORM_NAME
-		delete process.env.PLATFORM_NAME
+		const realKey = process.env.INTROSPECTION_CODE
+		delete process.env.INTROSPECTION_CODE
 
 		try {
-			await expect(start()).rejects.toThrow('Missing required environment variable: PLATFORM_NAME')
+			await expect(start()).rejects.toThrow('Missing required environment variable: INTROSPECTION_CODE')
 
 			expect(mongoose.connection.readyState).toBe(0)
 			expect(redisClient.isOpen).toBe(false)
 		} finally {
-			process.env.PLATFORM_NAME = realKey
+			process.env.INTROSPECTION_CODE = realKey
 		}
 	})
 })
