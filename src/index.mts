@@ -44,8 +44,10 @@ export const REQUIRED_ENV_VARS = [
 	// field, and every query that touches one throws on its first use instead of at startup.
 	'CSFLE_MASTER_KEY_PATH',
 	'CSFLE_KEY_VAULT_NAMESPACE',
-	'SOCKETLABS_SERVER_ID',
-	'SOCKETLABS_SERVER_APIKEY',
+	// ⚠️ `SOCKETLABS_SERVER_ID` and `SOCKETLABS_SERVER_APIKEY` are deliberately NOT here. Only
+	// `SocketLabsLib` reads them, this service imports no part of it, and every mail the platform sends
+	// is sent by `public-resource` — so the pair was a mail credential required at boot by a service that
+	// cannot send mail. E18-S10; the dependency itself left `package.json` in the same commit.
 	'REDIRECT_DOMAIN',
 	'EMAIL_FROM',
 	'DEV_TEAM_EMAIL',
