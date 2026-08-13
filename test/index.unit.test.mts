@@ -55,7 +55,7 @@ describe('checkRequiredEnv', () => {
 	 * a `toContain` passes an addition, so neither notices the change. The order is asserted too — the
 	 * boot names the *first* missing variable, and that is the one an operator goes looking for. E18-S03.
 	 */
-	it('requires exactly these 23 variables, in this order', () => {
+	it('requires exactly these 21 variables, in this order', () => {
 		expect(REQUIRED_ENV_VARS).toStrictEqual([
 			'PORT',
 			'REDIS_IS_CLUSTER',
@@ -71,8 +71,6 @@ describe('checkRequiredEnv', () => {
 			'MONGODB_URI',
 			'CSFLE_MASTER_KEY_PATH',
 			'CSFLE_KEY_VAULT_NAMESPACE',
-			'SOCKETLABS_SERVER_ID',
-			'SOCKETLABS_SERVER_APIKEY',
 			'REDIRECT_DOMAIN',
 			'EMAIL_FROM',
 			'DEV_TEAM_EMAIL',
