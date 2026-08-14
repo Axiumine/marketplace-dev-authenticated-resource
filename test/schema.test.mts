@@ -70,11 +70,22 @@ describe('schema', () => {
 		expect(fieldsOf('QueriesApi')).toEqual(['companyItems', 'itemCategories', 'shopOwnerCompanies'])
 	})
 
-	// The shop add/delete/disable mutations went the same way. The three
+	// The shop add/delete/disable mutations went the same way. The four
 	// `item*` are the owner's whole write surface on the catalogue — there is deliberately no
 	// `itemCategory*` here, because the taxonomy is written on the Admin tier alone.
+	// The two `*UpdatePublished` are the publish split: saving a card and putting it on the public site
+	// are two operations, so an owner reopening a stale form cannot republish what someone took down.
 	it('exposes the company and item mutations', () => {
-		expect(fieldsOf('MutationsApi')).toEqual(['companyAdd', 'companyDel', 'companyUpdate', 'itemAdd', 'itemDel', 'itemUpdate'])
+		expect(fieldsOf('MutationsApi')).toEqual([
+			'companyAdd',
+			'companyDel',
+			'companyUpdate',
+			'companyUpdatePublished',
+			'itemAdd',
+			'itemDel',
+			'itemUpdate',
+			'itemUpdatePublished'
+		])
 	})
 
 	// Same reasoning as `shopOwnerCompanies`: the taxonomy is platform-wide, so an argument here
@@ -109,19 +120,21 @@ describe('schema', () => {
 })
 
 describe('mutation arguments', () => {
-	// No `idShopOwner` on any of the three: the owner is the session's. `companyAdd` takes the input
+	// No `idShopOwner` on any of the eight: the owner is the session's. `companyAdd` takes the input
 	// object alone and `companyUpdate` takes it beside the `_id`, so a company cannot be handed to
-	// another owner by saving its card.
-	// No `idShopOwner` on any of the six: the owner is the session's. The item three carry no
-	// `idShopOwner` either — an item's owner is reached through its company, which is what the
-	// guards traverse.
+	// another owner by saving its card. The item four carry no `idShopOwner` either — an item's owner is
+	// reached through its company, which is what the guards traverse.
+	// The two publish mutations take the flag beside the `_id` and nothing else: they are not a save
+	// with one field, so no input object appears here.
 	it.each([
 		['companyAdd', ['company']],
 		['companyDel', ['_id']],
 		['companyUpdate', ['_id', 'company']],
+		['companyUpdatePublished', ['_id', 'published']],
 		['itemAdd', ['item']],
 		['itemDel', ['_id']],
-		['itemUpdate', ['_id', 'item']]
+		['itemUpdate', ['_id', 'item']],
+		['itemUpdatePublished', ['_id', 'published']]
 	])('%s takes %j', (name, expected) => {
 		expect(argsOf('MutationsApi', name)).toEqual(expected)
 	})
@@ -131,9 +144,11 @@ describe('mutation arguments', () => {
 		['companyAdd', 'add company'],
 		['companyDel', 'del company'],
 		['companyUpdate', 'update company'],
+		['companyUpdatePublished', 'publishes or unpublishes a company'],
 		['itemAdd', 'add item'],
 		['itemDel', 'del item'],
-		['itemUpdate', 'update item']
+		['itemUpdate', 'update item'],
+		['itemUpdatePublished', 'publishes or unpublishes an item']
 	])('%s carries its exact description', (name, description) => {
 		expect(descriptionOf('MutationsApi', name)).toBe(description)
 	})
@@ -192,20 +207,22 @@ describe('object types', () => {
 })
 
 describe('input types', () => {
-	// `GraphQLInputCompany` mirrors the output type minus the two fields the server sets.
-	it('mirrors the company, minus the two fields the owner cannot set', () => {
+	// `GraphQLInputCompany` mirrors the output type minus the two fields the server sets and the one
+	// that is a separate operation: `published` is written by `companyUpdatePublished` alone, so a save
+	// of the card cannot carry it and this assertion is what stops it coming back.
+	it('mirrors the company, minus the two fields the owner cannot set and the publish flag', () => {
 		expect(inputFieldsOf('GraphQLInputCompany')).toEqual(
-			fieldsOf('GraphQLCompany').filter((f) => f !== '_id' && f !== 'idShopOwner')
+			fieldsOf('GraphQLCompany').filter((f) => f !== '_id' && f !== 'idShopOwner' && f !== 'published')
 		)
 		expect(inputFieldsOf('GraphQLInputCompanyAddress')).toEqual(fieldsOf('GraphQLCompanyAddress'))
 		expect(inputFieldsOf('GraphQLInputCompanyPosition')).toEqual(fieldsOf('GraphQLCompanyPosition'))
 	})
 
-	// `_id` is the only one the server sets. `idCompany` stays writable on purpose — saving an item
-	// is also how it moves between the owner's shops, which is why `itemUpdate` guards the source and
-	// the destination separately.
-	it('mirrors the item, minus the id the server sets', () => {
-		expect(inputFieldsOf('GraphQLInputItem')).toEqual(fieldsOf('GraphQLItem').filter((f) => f !== '_id'))
+	// `_id` is the server's and `published` is `itemUpdatePublished`'s. `idCompany` stays writable on
+	// purpose — saving an item is also how it moves between the owner's shops, which is why `itemUpdate`
+	// guards the source and the destination separately.
+	it('mirrors the item, minus the id the server sets and the publish flag', () => {
+		expect(inputFieldsOf('GraphQLInputItem')).toEqual(fieldsOf('GraphQLItem').filter((f) => f !== '_id' && f !== 'published'))
 	})
 
 	// There is no `GraphQLInputItemCategory` on this tier at all: the taxonomy is written on the

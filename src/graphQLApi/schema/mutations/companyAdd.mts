@@ -30,10 +30,14 @@ export const companyAdd = {
 		company: { type: new GraphQLNonNull(GraphQLInputCompany) }
 	},
 	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+		// `published: false` is stamped here rather than taken from the input: publishing is
+		// `companyUpdatePublished`. It is also the only value the validator would accept from a shop
+		// this new — `published: true` needs a `slug` and a `publicName`, both optional on the input.
 		const newCompany: ICompanySchema = {
 			_id: new Types.ObjectId(),
 			idShopOwner: ctx.state.user._id,
-			...args.company
+			...args.company,
+			published: false
 		}
 
 		// `return await`, not `return`: without the await the promise escapes the try, so the catch

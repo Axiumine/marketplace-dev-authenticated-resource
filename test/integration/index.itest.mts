@@ -358,7 +358,7 @@ describe('companyDel (soft delete against the real collection)', () => {
 			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)
 
 			const { json } = await gql(
-				`mutation { companyAdd(company: { legalName: "Itest Refetched", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", published: false, address: { street: "1 Test Street", postalCode: "01103", city: "Springfield", province: "MA", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
+				`mutation { companyAdd(company: { legalName: "Itest Refetched", vatNumber: "${vatNumber}", contactPerson: "Itest ContactPerson", administrator: "Itest Administrator", certifiedEmail: "itest-${randomUUID()}@certifiedEmail.invalid", registryExtract: "itest-registryExtract", address: { street: "1 Test Street", postalCode: "01103", city: "Springfield", province: "MA", position: { type: "Point", coordinates: [9.57, 45.75] } } }) { _id } }`,
 				session.headers
 			)
 
@@ -384,6 +384,67 @@ describe('companyDel (soft delete against the real collection)', () => {
 
 			expect(json.errors?.[0]?.message).toBe('Forbidden')
 			expect((await db().collection('company').findOne({ _id: company._id }))?.deleted).toEqual(first)
+		} finally {
+			await session.cleanup()
+		}
+	})
+})
+
+/**
+ * Publishing is its own mutation on this tier, and the rule that decides whether it may succeed lives
+ * in the collection rather than in any resolver: `PUBLISHED_IMPLIES_LINKABLE`, the `$expr` clause that
+ * refuses `published: true` without both a `slug` and a `publicName`. No unit test can reach it — the
+ * model is mocked there — which is the same reason `vatNumber_unique` is exercised here.
+ */
+describe('companyUpdatePublished (the publish rule against the real collection)', () => {
+	const publish = (id: string, published: boolean, headers: Record<string, string>) =>
+		gql(`mutation { companyUpdatePublished(_id: "${id}", published: ${published}) }`, headers)
+
+	// A shop that has not been named cannot be published, and the refusal has to leave the flag alone
+	// rather than half-apply. `seedCompany` writes neither `slug` nor `publicName`, so this is the state
+	// every company is in the moment `companyAdd` creates it.
+	it('refuses to publish a company with no slug and no publicName, and leaves the flag false', async () => {
+		const session = await withSession()
+		const company = await seedCompany(session._id)
+		const _id = company._id.toHexString()
+
+		try {
+			const { json } = await publish(_id, true, session.headers)
+
+			expect(json.errors).toBeDefined()
+			expect(await db().collection('company').findOne({ _id: company._id })).toMatchObject({ published: false })
+		} finally {
+			await session.cleanup()
+		}
+	})
+
+	// Named first, published second — and both directions, because taking a shop off the site is the
+	// same mutation with the flag the other way round and the `$expr` has nothing to say about `false`.
+	// The two fields go in with the raw driver: what is under test is the publish call, not the save.
+	it('publishes and unpublishes a company that carries both, without touching the rest of the card', async () => {
+		const session = await withSession()
+		const company = await seedCompany(session._id)
+		const _id = company._id.toHexString()
+
+		try {
+			await db()
+				.collection('company')
+				.updateOne({ _id: company._id }, { $set: { publicName: 'Itest Shop', slug: `itest-${randomUUID()}` } })
+
+			const published = await publish(_id, true, session.headers)
+			expect(published.json.errors).toBeUndefined()
+			expect(await db().collection('company').findOne({ _id: company._id })).toMatchObject({ published: true })
+
+			const withdrawn = await publish(_id, false, session.headers)
+			expect(withdrawn.json.errors).toBeUndefined()
+
+			// The legal card is asserted untouched on the way back out: this mutation writes one field,
+			// so a regression that widened it into a save would show up here as a lost `registryExtract`.
+			expect(await db().collection('company').findOne({ _id: company._id })).toMatchObject({
+				published: false,
+				legalName: company.legalName,
+				registryExtract: 'itest-registryExtract'
+			})
 		} finally {
 			await session.cleanup()
 		}

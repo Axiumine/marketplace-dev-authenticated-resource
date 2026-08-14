@@ -1,6 +1,6 @@
 import { GraphQLAddressFrag } from '@axiumine/marketplace-common/schema/types/fragments/GraphQLAddressFrag'
 import { GraphQLPositionFrag } from '@axiumine/marketplace-common/schema/types/fragments/GraphQLPositionFrag'
-import { GraphQLBoolean, GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
+import { GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
 
 /**
  * The company as the owner fills it in — every field of `GraphQLCompany` except the two the server sets:
@@ -9,6 +9,12 @@ import { GraphQLBoolean, GraphQLInputObjectType, GraphQLNonNull, GraphQLString }
  * Replaces the company fields that used to be nested inside the old shop-add mutation, before `company`
  * had its own collection, and had to be retyped for every shop of the same chain. It gains `taxCode`
  * and `address`, which the embedded sub-document never carried.
+ *
+ * ⚠️ **`published` is deliberately absent**, for the reason `GraphQLInputItem` drops it: publishing a
+ * shop is its own operation — `companyUpdatePublished`, on this tier and on 4024 — and not something a
+ * save of the card decides. `companyAdd` stamps `false`, which is also what the `published: true`
+ * requires `slug` and `publicName` clause of the validator wants from a shop that has just been typed
+ * in.
  */
 export const GraphQLInputCompany = new GraphQLInputObjectType({
 	name: 'GraphQLInputCompany',
@@ -26,12 +32,7 @@ export const GraphQLInputCompany = new GraphQLInputObjectType({
 		// the whole object — a field missing from this input is a field the owner can never clear.
 		publicName: { type: GraphQLString },
 		slug: { type: GraphQLString },
-		description: { type: GraphQLString },
-		// ⚠️ Non-null, and the database will refuse `true` unless `slug` and `publicName` come with
-		// it: the `company` validator carries an `$expr` clause saying a published shop must be
-		// linkable and renderable. It runs on updates as well as inserts, so an owner cannot publish
-		// first and name the shop afterwards — the two have to land in the same call.
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
+		description: { type: GraphQLString }
 	})
 })
 

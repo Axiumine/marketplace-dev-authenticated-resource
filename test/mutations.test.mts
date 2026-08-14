@@ -10,6 +10,7 @@ const companyCreate = vi.fn()
 const throwIfShopOwnerDontOwnCompany = vi.fn()
 const funCompanyDelete = vi.fn()
 const funCompanyUpdate = vi.fn()
+const funCompanyUpdatePublished = vi.fn()
 
 // tryCatchRethrow is deliberately NOT mocked: turning a driver error into the right GraphQL status
 // is the behaviour under test here. Only Sentry is stubbed, so its `else` branch stays silent.
@@ -20,10 +21,12 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))
 vi.mock('@lib/company/funCompanyDelete.mjs', () => ({ funCompanyDelete }))
 vi.mock('@lib/company/funCompanyUpdate.mjs', () => ({ funCompanyUpdate }))
+vi.mock('@lib/company/funCompanyUpdatePublished.mjs', () => ({ funCompanyUpdatePublished }))
 
 const { companyAdd } = await import('../src/graphQLApi/schema/mutations/companyAdd.mts')
 const { companyDel } = await import('../src/graphQLApi/schema/mutations/companyDel.mts')
 const { companyUpdate } = await import('../src/graphQLApi/schema/mutations/companyUpdate.mts')
+const { companyUpdatePublished } = await import('../src/graphQLApi/schema/mutations/companyUpdatePublished.mts')
 
 const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
 const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
@@ -45,6 +48,7 @@ beforeEach(() => {
 	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
 	funCompanyDelete.mockResolvedValue(undefined)
 	funCompanyUpdate.mockResolvedValue(undefined)
+	funCompanyUpdatePublished.mockResolvedValue(undefined)
 })
 
 describe('companyAdd', () => {
@@ -60,6 +64,17 @@ describe('companyAdd', () => {
 		expect(doc).toMatchObject({ idShopOwner: userId, ...args.company })
 		expect(doc._id).toBeInstanceOf(Types.ObjectId)
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+	})
+
+	// `published` left `GraphQLInputCompany` when publishing became `companyUpdatePublished`, so the
+	// resolver writes the flag itself — it is `required` on the collection. `false` is also the only
+	// value that could work here: the validator refuses a published shop without a `slug` and a
+	// `publicName`, and this input carries neither.
+	it('stamps the new company as an unpublished draft', async () => {
+		await run(companyAdd, args)
+
+		const [doc] = companyCreate.mock.calls[0]
+		expect(doc.published).toBe(false)
 	})
 
 	// `vatNumber_unique` is global, so a VAT number already used by another owner's company fails here —
@@ -115,6 +130,55 @@ describe('companyUpdate', () => {
 		funCompanyUpdate.mockRejectedValueOnce(driverError)
 
 		await expect(run(companyUpdate, args)).rejects.toThrow('Internal Server Error')
+	})
+})
+
+describe('companyUpdatePublished', () => {
+	const args = { _id: idCompany, published: true }
+
+	// The same ownership guard `companyUpdate` runs, and then one flag: no input object, nothing else
+	// written. That separation is the point — an owner saving the card of a shop an operator has just
+	// taken down no longer puts it back.
+	it('checks ownership then delegates the flag and answers true', async () => {
+		await expect(run(companyUpdatePublished, args)).resolves.toBe(true)
+
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
+		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(idCompany, userId, true)
+		expect(funCompanyUpdate).not.toHaveBeenCalled()
+	})
+
+	it('passes false through unchanged when the owner takes the shop off the site', async () => {
+		await expect(run(companyUpdatePublished, { _id: idCompany, published: false })).resolves.toBe(true)
+
+		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(idCompany, userId, false)
+	})
+
+	it('does not write when the caller does not own the company', async () => {
+		throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(
+			new GraphQLError('Forbidden', { extensions: { http: { status: 403 } } })
+		)
+
+		await expect(run(companyUpdatePublished, args)).rejects.toMatchObject({ message: 'Forbidden' })
+		expect(funCompanyUpdatePublished).not.toHaveBeenCalled()
+	})
+
+	// The one this mutation really needs: publishing a shop with no `slug` or `publicName` is refused by
+	// the collection's `$expr`, and that refusal has to reach the client as itself rather than as a 500.
+	it('keeps a downstream GraphQL error instead of flattening it', async () => {
+		funCompanyUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+
+		await expect(run(companyUpdatePublished, args)).rejects.toMatchObject({
+			message: 'Conflict',
+			extensions: { http: { status: 409 } }
+		})
+		expect(captureException).not.toHaveBeenCalled()
+	})
+
+	it('turns a driver failure into a 500', async () => {
+		funCompanyUpdatePublished.mockRejectedValueOnce(driverError)
+
+		await expect(run(companyUpdatePublished, args)).rejects.toThrow('Internal Server Error')
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
 	})
 })
 

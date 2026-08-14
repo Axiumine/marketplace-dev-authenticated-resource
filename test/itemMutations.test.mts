@@ -11,6 +11,7 @@ const throwIfShopOwnerDontOwnCompany = vi.fn()
 const throwIfShopOwnerDontOwnItem = vi.fn()
 const throwIfItemCategoryMissing = vi.fn()
 const funItemUpdate = vi.fn()
+const funItemUpdatePublished = vi.fn()
 const funItemDelete = vi.fn()
 
 // tryCatchRethrow is deliberately NOT mocked, as in `mutations.test.mts`: turning a driver error into
@@ -21,10 +22,12 @@ vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopO
 vi.mock('@lib/item/throwIfShopOwnerDontOwnItem.mjs', () => ({ throwIfShopOwnerDontOwnItem }))
 vi.mock('@lib/item/throwIfItemCategoryMissing.mjs', () => ({ throwIfItemCategoryMissing }))
 vi.mock('@lib/item/funItemUpdate.mjs', () => ({ funItemUpdate }))
+vi.mock('@lib/item/funItemUpdatePublished.mjs', () => ({ funItemUpdatePublished }))
 vi.mock('@lib/item/funItemDelete.mjs', () => ({ funItemDelete }))
 
 const { itemAdd } = await import('../src/graphQLApi/schema/mutations/itemAdd.mts')
 const { itemUpdate } = await import('../src/graphQLApi/schema/mutations/itemUpdate.mts')
+const { itemUpdatePublished } = await import('../src/graphQLApi/schema/mutations/itemUpdatePublished.mts')
 const { itemDel } = await import('../src/graphQLApi/schema/mutations/itemDel.mts')
 
 const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
@@ -34,13 +37,14 @@ const itemId = new Types.ObjectId('507f1f77bcf86cd799439020')
 
 const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwnerAuthenticatedResource
 
+// No `published`: it left `GraphQLInputItem` when publishing became its own mutation, so a client that
+// still sent it would be rejected by GraphQL before any of this ran.
 const item = {
 	idCompany,
 	idCategory,
 	name: 'Sneaker',
 	description: 'Baked this morning',
-	slug: 'sneaker',
-	published: true
+	slug: 'sneaker'
 }
 
 /** Anything not a Mongo duplicate-key / [Validator] error ends up a 500 through tryCatchRethrow. */
@@ -64,6 +68,7 @@ beforeEach(() => {
 	throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
 	throwIfItemCategoryMissing.mockResolvedValue(undefined)
 	funItemUpdate.mockResolvedValue(undefined)
+	funItemUpdatePublished.mockResolvedValue(undefined)
 	funItemDelete.mockResolvedValue(undefined)
 })
 
@@ -79,6 +84,16 @@ describe('itemAdd', () => {
 		const [doc] = itemCreate.mock.calls[0]
 		expect(doc).toMatchObject(item)
 		expect(doc._id).toBeInstanceOf(Types.ObjectId)
+	})
+
+	// The client cannot send the flag, so the resolver has to write one — `published` is `required` on
+	// the collection and the insert fails without it. `false` and not `true`: a new item is a draft until
+	// its owner publishes it on purpose, which is the whole point of the split.
+	it('stamps the new item as an unpublished draft', async () => {
+		await run(itemAdd, { item })
+
+		const [doc] = itemCreate.mock.calls[0]
+		expect(doc.published).toBe(false)
 	})
 
 	// Ownership first, existence second, and the order is the assertion: a caller who does not own the
@@ -180,6 +195,54 @@ describe('itemUpdate', () => {
 		funItemUpdate.mockRejectedValueOnce(driverError)
 
 		await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+})
+
+describe('itemUpdatePublished', () => {
+	// One guard, not three: nothing moves, so the only question is whether the item is the session's.
+	// The company and category guards must stay out of it — reaching for them here would make publishing
+	// fail on a category an operator retired, which has nothing to do with what the owner asked.
+	it('checks ownership alone, then delegates the flag', async () => {
+		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).resolves.toBe(true)
+
+		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
+		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, userId, true)
+	})
+
+	// Both directions through the same resolver: withdrawing is the same call with the flag the other
+	// way round, and nothing in between rewrites it.
+	it('passes false through unchanged when the owner withdraws the item', async () => {
+		await expect(run(itemUpdatePublished, { _id: itemId, published: false })).resolves.toBe(true)
+
+		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, userId, false)
+	})
+
+	it('does not write when the item is not the caller’s', async () => {
+		throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
+
+		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
+		expect(funItemUpdatePublished).not.toHaveBeenCalled()
+	})
+
+	// The `$expr`-style refusals live on `company`, not here, but a downstream GraphQLError still has to
+	// keep its status rather than be flattened — same reason `itemUpdate` asserts it.
+	it('keeps a downstream GraphQL error instead of flattening it', async () => {
+		funItemUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+
+		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({
+			message: 'Conflict',
+			extensions: { http: { status: 409 } }
+		})
+		expect(captureException).not.toHaveBeenCalled()
+	})
+
+	it('turns a driver failure into a 500', async () => {
+		funItemUpdatePublished.mockRejectedValueOnce(driverError)
+
+		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
 	})
 })
