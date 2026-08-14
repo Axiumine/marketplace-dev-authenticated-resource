@@ -88,6 +88,31 @@ UPLOAD_DIR=/media/xxx
 MAX_IMAGE_MB=20
 MAX_VIDEO_MB=100
 
+# ── The static domain ─────────────────────────────────────────────────────────
+#
+# Where files that have finished being uploaded are served from. `itemAdd` writes an item's picture to
+# STATIC_FOLDER/item/<idCompany>/<_id>.webp, and the document stores the last segment alone — the
+# frontend rebuilds the URL from the two ids it already holds.
+#
+# Required at boot (REQUIRED_ENV_VARS in src/index.mts), unlike the three above, and the reason is that
+# an unset value does not fail: koa-utils' moveFileStaticDomain interpolates it into the destination
+# path, so the directory becomes the literal `undefined/item/...` relative to the process's working
+# directory, fs.ensureDir creates it and the move succeeds. The item then names a picture that exists
+# on disk where no vhost serves it, and nothing shows that up until someone looks at the card.
+#
+# ⚠️ The web server serves this directory, so nothing untrusted may be written into it. Everything
+# arriving here has been through uploadTempImage first — extension and MIME check, ClamAV scan, and a
+# re-encode that rebuilds the file from decoded pixels. Do not point it at the temp directory those
+# checks run in, which is a hardcoded `/tmp` (koa-utils `files/fileConst.mjs`) and holds files that
+# have passed none of them yet.
+#
+# ⚠️ The three variables above are not this feature's. `UPLOAD_DIR`, `MAX_IMAGE_MB` and `MAX_VIDEO_MB`
+# are read by nothing in this service and by nothing in koa-utils' `files/` — raising MAX_IMAGE_MB
+# changes no limit. The picture size cap is 5 MB, hardcoded as `storeUploadAsTemp`'s default, which
+# `uploadTempImage` never overrides; graphqlUploadKoa's 30 MB in src/index.mts sits above it and so
+# never binds. Over 5 MB the upload answers 500.
+STATIC_FOLDER=/media/xxx/static
+
 # No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
 # @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
 #

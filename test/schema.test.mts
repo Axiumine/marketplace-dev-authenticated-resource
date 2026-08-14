@@ -190,11 +190,26 @@ describe('object types', () => {
 		expect(nullable).toEqual(['taxCode', 'uniqueCode', 'publicName', 'slug', 'description'])
 	})
 
-	// Every field NonNull, `published` included: an item is either a draft or on a public page, and a
-	// third state read back as null would be silently neither.
+	// Every field NonNull but one, `published` included: an item is either a draft or on a public page,
+	// and a third state read back as null would be silently neither.
+	//
+	// `image` is that one, and the null is the whole value of the field: it says the item has no
+	// picture, which is exactly what a card has to know before it can choose between one and a
+	// placeholder. It is a file name rather than a URL — the client joins it to `idCompany`, which is on
+	// this same type.
 	it('GraphQLItem carries the item, its company and its category', () => {
-		expect(fieldsOf('GraphQLItem')).toEqual(['_id', 'idCompany', 'idCategory', 'name', 'description', 'slug', 'published'])
-		expect(fieldsOf('GraphQLItem').filter((name) => !typeOfField('GraphQLItem', name).endsWith('!'))).toEqual([])
+		expect(fieldsOf('GraphQLItem')).toEqual([
+			'_id',
+			'idCompany',
+			'idCategory',
+			'name',
+			'description',
+			'slug',
+			'published',
+			'image'
+		])
+		expect(fieldsOf('GraphQLItem').filter((name) => !typeOfField('GraphQLItem', name).endsWith('!'))).toEqual(['image'])
+		expect(typeOfField('GraphQLItem', 'image')).toBe('String')
 	})
 
 	// `idParent` is the one nullable, and that nullability *is* the tree: absent means top level,
@@ -223,6 +238,15 @@ describe('input types', () => {
 	// guards the source and the destination separately.
 	it('mirrors the item, minus the id the server sets and the publish flag', () => {
 		expect(inputFieldsOf('GraphQLInputItem')).toEqual(fieldsOf('GraphQLItem').filter((f) => f !== '_id' && f !== 'published'))
+	})
+
+	// ⚠️ `image` is on both lists above and is **not** the same thing twice — bytes going in, a file
+	// name coming back — so the mirror assertion cannot tell them apart and this is what does. It also
+	// pins the one nullable member of the input: an item may be created without a picture, and an
+	// `Upload` cannot be echoed back for a client to resend on the next save.
+	it('takes the item picture as bytes and answers a file name', () => {
+		expect(typeOfField('GraphQLInputItem', 'image')).toBe('Upload')
+		expect(typeOfField('GraphQLItem', 'image')).toBe('String')
 	})
 
 	// There is no `GraphQLInputItemCategory` on this tier at all: the taxonomy is written on the

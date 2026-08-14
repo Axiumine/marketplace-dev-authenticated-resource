@@ -5,6 +5,7 @@ const companyFind = vi.fn()
 const itemUpdateOne = vi.fn()
 const itemCountDocuments = vi.fn()
 const itemCategoryCountDocuments = vi.fn()
+const uploadTempImage = vi.fn()
 
 vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.fn() }))
 // ⚠️ No `deleteOne` on the Item mock, for the reason `companyLib.test.mts` leaves it off Company:
@@ -17,6 +18,9 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
 vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 	ItemCategory: { countDocuments: itemCategoryCountDocuments }
 }))
+// Stubbed rather than run: the real one writes the upload to disk, hands it to ClamAV and re-encodes it
+// through sharp. What `storeItemImage` adds on top is the naming, and that is what is under test here.
+vi.mock('@axiumine/koa-utils/files/uploadTempImage', () => ({ uploadTempImage }))
 
 const { shopOwnerCompanyIds } = await import('../src/lib/company/shopOwnerCompanyIds.mts')
 const { funItemDelete } = await import('../src/lib/item/funItemDelete.mts')
@@ -24,6 +28,7 @@ const { funItemUpdate } = await import('../src/lib/item/funItemUpdate.mts')
 const { funItemUpdatePublished } = await import('../src/lib/item/funItemUpdatePublished.mts')
 const { throwIfItemCategoryMissing } = await import('../src/lib/item/throwIfItemCategoryMissing.mts')
 const { throwIfShopOwnerDontOwnItem } = await import('../src/lib/item/throwIfShopOwnerDontOwnItem.mts')
+const { storeItemImage } = await import('../src/lib/item/storeItemImage.mts')
 
 const shopOwnerId = new Types.ObjectId('507f1f77bcf86cd799439011')
 const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
@@ -68,6 +73,41 @@ beforeEach(() => {
 	updateExec.mockReset().mockResolvedValue({ matchedCount: 1 })
 	itemCountDocuments.mockReset().mockReturnValue(counting(1))
 	itemCategoryCountDocuments.mockReset().mockReturnValue(counting(1))
+	uploadTempImage.mockReset()
+})
+
+describe('storeItemImage', () => {
+	// What graphql-upload hands a resolver — a promise, not the stream — forwarded untouched.
+	const upload = Promise.resolve({ filename: 'shoe.JPG' })
+
+	// ⚠️ Two names out of one id, and the difference between them is load-bearing: the document stores
+	// `fileName`, while `moveFileStaticDomain` takes `destBaseName`, because the move re-appends the temp
+	// file's own extension to whatever it is handed. Handing it `fileName` writes `<_id>.webp.webp` to
+	// disk while the item says `<_id>.webp`, and every card renders a 404.
+	//
+	// The name comes from the `_id` and never from `shoe.JPG`: an uploader controls its own filename, and
+	// that name would land as a path segment on disk and inside a URL three frontends build.
+	it('names the picture after the item, in both the forms its two callers need', async () => {
+		uploadTempImage.mockResolvedValue({ tempFile: '/tmp/upload/2a1d.webp', ext: 'webp' })
+
+		await expect(storeItemImage(upload, itemId)).resolves.toEqual({
+			tempFile: '/tmp/upload/2a1d.webp',
+			fileName: `${itemId.toHexString()}.webp`,
+			destBaseName: itemId.toHexString()
+		})
+		expect(uploadTempImage).toHaveBeenCalledExactlyOnceWith(upload)
+	})
+
+	// The extension is whatever the re-encode says it produced, not a literal here and not the uploaded
+	// file's. koa-utils answers `webp` today; the day it answers anything else, the document has to say
+	// the same thing the file on disk does.
+	it('takes the extension from the re-encode rather than assuming one', async () => {
+		uploadTempImage.mockResolvedValue({ tempFile: '/tmp/upload/2a1d.avif', ext: 'avif' })
+
+		await expect(storeItemImage(upload, itemId)).resolves.toMatchObject({
+			fileName: `${itemId.toHexString()}.avif`
+		})
+	})
 })
 
 describe('shopOwnerCompanyIds', () => {
@@ -187,6 +227,34 @@ describe('funItemUpdate', () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
 
 		await expect(funItemUpdate(itemId, shopOwnerId, data)).rejects.toThrow('Internal Server Error')
+	})
+
+	// ⚠️ The type says this cannot happen and the wire says otherwise. `GraphQLInputItem` declares
+	// `image: Upload` so `itemAdd` can take a picture in the same call, and GraphQL hands the very same
+	// input to `itemUpdate` — so a save is free to arrive carrying a promise of a stream. A whole-object
+	// `$set` would then write it into a path the validator declares a string, and the save fails on the
+	// one mutation a client can reach it from. The key is dropped at the write rather than in the
+	// resolver because there is exactly one `$set` here and a second caller cannot bypass it.
+	//
+	// The assertion is on the whole update object, not on `image` alone: a `toBeUndefined` on the key
+	// would also pass if the strip had quietly taken the rest of the card with it.
+	it('never writes an image, whatever the client sent under that key', async () => {
+		const withUpload = { ...(data as object), image: Promise.resolve({ filename: 'shoe.jpg' }) } as never
+
+		await expect(funItemUpdate(itemId, shopOwnerId, withUpload)).resolves.toBeUndefined()
+
+		expect(expectOwnerScopedWrite()).toEqual({ $set: data })
+	})
+
+	// The copy is the guard: stripping the key off the caller's own object would mutate the resolver's
+	// `args`, which is a side effect on a value the caller still holds.
+	it('leaves the object it was given untouched', async () => {
+		const image = Promise.resolve({ filename: 'shoe.jpg' })
+		const withUpload = { ...(data as object), image } as never
+
+		await funItemUpdate(itemId, shopOwnerId, withUpload)
+
+		expect((withUpload as { image?: unknown }).image).toBe(image)
 	})
 })
 
