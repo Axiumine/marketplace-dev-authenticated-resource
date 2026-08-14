@@ -1,5 +1,5 @@
 import { GraphQLItemFrag } from '@axiumine/marketplace-common/schema/types/fragments/GraphQLItemFrag'
-import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType } from 'graphql'
+import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLString } from 'graphql'
 
 /**
  * One thing a shop sells, as its owner sees it.
@@ -15,6 +15,15 @@ import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType } from 'gr
  *
  * `deleted` is not exposed at all. A retired item is filtered out of every read on this tier, so the
  * only value the field could ever carry over the wire is `null`.
+ *
+ * `image` is added here and **not** to `GraphQLItemFrag`, which is the shared one: putting it there
+ * would publish the field on the operator tier and the public tier at once, neither of which has a
+ * screen for it yet. This tier is where the picture is uploaded, so it is the tier that has to be able
+ * to read back what the upload produced.
+ *
+ * It is nullable, unlike everything else the owner writes, because an item may have no picture — and
+ * that null is precisely what the field is for. It is a **file name**, not a URL: the client builds
+ * `<static>/item/<idCompany>/<image>`, and both segments it needs are on this same type.
  */
 export const GraphQLItem = new GraphQLObjectType({
 	name: 'GraphQLItem',
@@ -23,6 +32,8 @@ export const GraphQLItem = new GraphQLObjectType({
 		idCompany: { type: new GraphQLNonNull(GraphQLID) },
 		idCategory: { type: new GraphQLNonNull(GraphQLID) },
 		...GraphQLItemFrag,
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
+		published: { type: new GraphQLNonNull(GraphQLBoolean) },
+		// Nullable, and a file name rather than a URL — see the header.
+		image: { type: GraphQLString }
 	})
 })

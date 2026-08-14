@@ -13,6 +13,8 @@ const throwIfItemCategoryMissing = vi.fn()
 const funItemUpdate = vi.fn()
 const funItemUpdatePublished = vi.fn()
 const funItemDelete = vi.fn()
+const storeItemImage = vi.fn()
+const moveFileStaticDomain = vi.fn()
 
 // tryCatchRethrow is deliberately NOT mocked, as in `mutations.test.mts`: turning a driver error into
 // the right GraphQL status is the behaviour under test. Only Sentry is stubbed.
@@ -24,6 +26,11 @@ vi.mock('@lib/item/throwIfItemCategoryMissing.mjs', () => ({ throwIfItemCategory
 vi.mock('@lib/item/funItemUpdate.mjs', () => ({ funItemUpdate }))
 vi.mock('@lib/item/funItemUpdatePublished.mjs', () => ({ funItemUpdatePublished }))
 vi.mock('@lib/item/funItemDelete.mjs', () => ({ funItemDelete }))
+// The upload half is stubbed at its own two seams rather than exercised: `storeItemImage` reaches
+// ClamAV and sharp, and `moveFileStaticDomain` writes into STATIC_FOLDER. What this file is testing is
+// the *order* the three steps run in and what each is handed — see `itemAdd`'s header.
+vi.mock('@lib/item/storeItemImage.mjs', () => ({ storeItemImage }))
+vi.mock('@axiumine/koa-utils/files/moveFileStaticDomain', () => ({ moveFileStaticDomain }))
 
 const { itemAdd } = await import('../src/graphQLApi/schema/mutations/itemAdd.mts')
 const { itemUpdate } = await import('../src/graphQLApi/schema/mutations/itemUpdate.mts')
@@ -45,6 +52,20 @@ const item = {
 	name: 'Sneaker',
 	description: 'Baked this morning',
 	slug: 'sneaker'
+}
+
+// What `graphql-upload` hands a resolver: a promise, never the stream itself. Its contents are never
+// read here — `storeItemImage` is mocked — so an opaque marker is enough, and it is what the assertion
+// that the resolver forwards the upload untouched is made against.
+const upload = Promise.resolve({ filename: 'shoe.jpg' })
+
+// What the mocked `storeItemImage` answers. The two names differ by the extension on purpose: the
+// document stores `fileName`, and `moveFileStaticDomain` is handed `destBaseName`, because the move
+// re-appends the temp file's own extension to whatever it is given.
+const stored = {
+	tempFile: '/tmp/upload/2a1d.webp',
+	fileName: '507f1f77bcf86cd799439020.webp',
+	destBaseName: '507f1f77bcf86cd799439020'
 }
 
 /** Anything not a Mongo duplicate-key / [Validator] error ends up a 500 through tryCatchRethrow. */
@@ -70,6 +91,8 @@ beforeEach(() => {
 	funItemUpdate.mockResolvedValue(undefined)
 	funItemUpdatePublished.mockResolvedValue(undefined)
 	funItemDelete.mockResolvedValue(undefined)
+	storeItemImage.mockResolvedValue(stored)
+	moveFileStaticDomain.mockResolvedValue(undefined)
 })
 
 describe('itemAdd', () => {
@@ -96,13 +119,98 @@ describe('itemAdd', () => {
 		expect(doc.published).toBe(false)
 	})
 
+	// The common case, and the one that has to stay cheap: an item with no picture must not reach the
+	// upload machinery at all, and must be written without the path rather than with an empty one — the
+	// validator's `image` is optional, and a null there is not the same document as a missing key.
+	it('touches neither the temp directory nor the static domain when no picture was sent', async () => {
+		await run(itemAdd, { item })
+
+		expect(storeItemImage).not.toHaveBeenCalled()
+		expect(moveFileStaticDomain).not.toHaveBeenCalled()
+
+		const [doc] = itemCreate.mock.calls[0]
+		expect(doc.image).toBeUndefined()
+	})
+
+	// The three steps of `itemAdd`'s header, in the one order that leaves nothing orphaned: store the
+	// upload in the temp directory, write the document, and only then make the file publicly reachable.
+	// The upload is forwarded as it arrived — a promise, which is what graphql-upload hands a resolver —
+	// together with the `_id` the resolver has just minted, so the picture is named after the item
+	// rather than after whatever the client called its file.
+	it('stores the picture, writes the item, then publishes the file under the shop', async () => {
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).resolves.toEqual({ _id: itemId })
+
+		const [doc] = itemCreate.mock.calls[0]
+		expect(storeItemImage).toHaveBeenCalledExactlyOnceWith(upload, doc._id)
+
+		// The document carries the file name and nothing else about the picture: not a path, not a URL,
+		// and not the `Upload` it came from — that key is pulled out of the object before mongoose sees it.
+		expect(doc.image).toBe(stored.fileName)
+
+		// ⚠️ `destBaseName`, not `fileName`: `moveTempFile` under this call appends the temp file's own
+		// extension to what it is handed, so passing the name with `.webp` already on it would land the
+		// picture as `<_id>.webp.webp` while the document says `<_id>.webp`.
+		expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
+			stored.tempFile,
+			'item',
+			idCompany.toHexString(),
+			stored.destBaseName
+		)
+
+		expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(storeItemImage.mock.invocationCallOrder[0])
+		expect(moveFileStaticDomain.mock.invocationCallOrder[0]).toBeGreaterThan(itemCreate.mock.invocationCallOrder[0])
+	})
+
+	// Nothing publicly served may belong to an item that was never created. The slug collision is the
+	// ordinary way this insert fails, so it is the case worth pinning: the re-encoded file stays in the
+	// temp directory, where the operating system reclaims it and where no URL points.
+	it('leaves the picture in the temp directory when the insert fails', async () => {
+		itemCreate.mockRejectedValueOnce(
+			Object.assign(new Error('E11000 duplicate key error collection: item index: idCompany_slug_unique'), {
+				errorResponse: { code: 11000 }
+			})
+		)
+
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
+			extensions: { http: { status: 409 } }
+		})
+		expect(moveFileStaticDomain).not.toHaveBeenCalled()
+	})
+
+	// The upload is inside the same try as the two writes, and this is what says so: a file that fails
+	// validation, the virus scan or the re-encode has to come back as the 500 tryCatchRethrow makes,
+	// with the cause in Sentry — not as a raw rejection Apollo renders on its own terms.
+	it('turns a rejected upload into a 500, without writing the item', async () => {
+		const uploadFailure = new Error('Error storing image')
+		storeItemImage.mockRejectedValueOnce(uploadFailure)
+
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
+		expect(itemCreate).not.toHaveBeenCalled()
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(uploadFailure)
+	})
+
+	// The residual case `itemAdd`'s header writes down and does not repair: the item exists, and the
+	// client is told the call failed. Asserted so that the behaviour is a decision on record rather than
+	// something a reader has to infer from where the try block happens to end.
+	it('reports a 500 when the file cannot be published, and does not undo the item', async () => {
+		const moveFailure = new Error('EXDEV: cross-device link not permitted')
+		moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
+
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
+		expect(itemCreate).toHaveBeenCalledOnce()
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
+	})
+
 	// Ownership first, existence second, and the order is the assertion: a caller who does not own the
-	// shop must learn nothing about which category ids are real.
-	it('does not reach the category check, or the write, for a shop that is not the caller’s', async () => {
+	// shop must learn nothing about which category ids are real. The upload is behind both guards for a
+	// second reason — it writes a file, scans it and re-encodes it, so a refused request that still ran
+	// it would hand a stranger the expensive half of the mutation.
+	it('does not reach the category check, the upload or the write, for a shop that is not the caller’s', async () => {
 		throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemAdd, { item })).rejects.toMatchObject({ message: 'Forbidden' })
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({ message: 'Forbidden' })
 		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+		expect(storeItemImage).not.toHaveBeenCalled()
 		expect(itemCreate).not.toHaveBeenCalled()
 	})
 

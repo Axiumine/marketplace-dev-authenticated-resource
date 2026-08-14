@@ -31,6 +31,43 @@ A company also has to be nameable before it can be published: the collection's `
 | `companyItems` | one shop's catalogue |
 | `itemCategories` | read-only here — category writes are Admin-only, in `marketplace-dev-admin-authenticated-resource` |
 
+## The item picture
+
+⚠️ **`itemAdd` is the only mutation on this platform that takes a file, and the only writer of
+`item.image`.** The `Upload` sits inside `GraphQLInputItem` rather than beside it, so adding an item and
+giving it a picture are one call: `graphqlUploadKoa` (mounted in `src/index.mts`) turns the multipart
+part into a promise of a stream, and `storeItemImage` hands it to koa-utils' `uploadTempImage` —
+extension and MIME check, ClamAV scan, then a re-encode to webp. That re-encode is the security step:
+the file that reaches the static domain is one this process built from decoded pixels, so a payload
+smuggled inside a valid image does not survive it.
+
+⚠️ **The size cap is 5 MB and it is not configurable from here.** It is `storeUploadAsTemp`'s default
+inside koa-utils, which `uploadTempImage` never overrides; `graphqlUploadKoa`'s 30 MB sits above it and
+never binds. A larger picture fails inside `uploadTempImage`, which collapses every cause to
+`Error storing image`, so the client is told 500 rather than "too big".
+
+Three steps, **straddling the insert**, and the order is the design: store the upload in the temp
+directory → `Item.create` → `moveFileStaticDomain` into `STATIC_FOLDER/item/<idCompany>/`. Nothing
+becomes publicly reachable before the document exists, so the ordinary failure — a slug already taken in
+the shop, 409 — leaves the file in the temp directory where no URL points. The mirror case is not
+repaired: a move that fails after a successful insert answers 500 with the item already created. See
+`itemAdd.mts`.
+
+`item.image` holds **a file name and nothing else** — `<_id>.webp`, no path and no URL, because the two
+segments that locate it are already on the document. `moveFileStaticDomain` is handed the same name
+*without* its extension: `moveTempFile` under it re-appends the temp file's own, so passing the stored
+name lands the bytes as `<_id>.webp.webp` while the document says otherwise. `IStoredItemImage` carries
+both forms for that reason and neither call site builds the other's.
+
+⚠️ **`itemUpdate` shares the same input and must never write the field.** `IItemUpdate` omits it and
+`funItemUpdate` drops the key at the `$set` as well, because what arrives over the wire is not what the
+type says: GraphQL will hand an `Upload` to the save without complaint, and `$set` would write a promise
+into a path the validator declares a string. There is no replace-a-picture path yet, deliberately.
+
+`STATIC_FOLDER` is required at boot for this reason. Unset it does not fail — the destination directory
+becomes the literal `undefined/item/...` under the working directory, the move succeeds, and the only
+symptom is one broken picture.
+
 ## Ownership is the whole job
 
 ⚠️ **Every mutation here takes an id from the client, so every mutation must prove the caller owns it.**

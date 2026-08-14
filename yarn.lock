@@ -184,10 +184,10 @@
   resolved "http://yarnproxy.gio.lan:4873/@axiumine/eslint-config-be/-/eslint-config-be-2.0.2.tgz#23f0e79981bce36ad09979ae0b27b23a1183cec6"
   integrity sha512-uOuWXo093AVrrO5jW46v+F2mW7k+yz0cH5NCU/bGv0gnnFxAfmO6dhW19SbdT6uL/1CbX5DiGeKC/hVPdZY+FA==
 
-"@axiumine/koa-utils@^6.0.0":
-  version "6.0.0"
-  resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-6.0.0.tgz#7b4720d7141f2f41ed55d42a4b383c60c520dd0c"
-  integrity sha512-SNqJOkXoc4K1Uny/uehHdPgHnS2Qpp854PY8uKG4W4TvpjzqkytjFlF38XAZv+1FZZkajLU/KfJ6G8pgJvosaA==
+"@axiumine/koa-utils@^7.0.0":
+  version "7.0.0"
+  resolved "https://registry.npmjs.org/@axiumine/koa-utils/-/koa-utils-7.0.0.tgz#df7f93668107ec1b1442d1dc215fd287a3add452"
+  integrity sha512-V1VdbDkXTBlSvJcTEwWma3K6DZU1kPjMPoNcaomCmquCKWBQ89frWrk55SwmYxO1ApojuWa2G+/TdqnSGupCaA==
 
 "@babel/code-frame@^7.29.7":
   version "7.29.7"
@@ -3339,15 +3339,10 @@ graphql@^14.5.3:
   dependencies:
     iterall "^1.2.2"
 
-graphql@^16.14.2:
+graphql@^16.14.2, graphql@^16.9.0:
   version "16.14.2"
   resolved "http://yarnproxy.gio.lan:4873/graphql/-/graphql-16.14.2.tgz#83faf25869e3df727cc855161db5da85b0e5b2c0"
   integrity sha512-Chq1s4CY7jmh8gO2qvLIJyfCDIN+EHLFW/9iShnp1z8FjBQMoodWP1kDC36VAMXXIvAjj4ARa7ntfAV2BrjsbA==
-
-graphql@^16.9.0:
-  version "16.12.0"
-  resolved "http://yarnproxy.gio.lan:4873/graphql/-/graphql-16.12.0.tgz#28cc2462435b1ac3fdc6976d030cef83a0c13ac7"
-  integrity sha512-DKKrynuQRne0PNpEbzuEdHlYOMksHSUI8Zc9Unei5gTsMNA2/vMpoMz/yKba50pejK56qj98qM0SjYxAKi13gQ==
 
 has-flag@^4.0.0:
   version "4.0.0"

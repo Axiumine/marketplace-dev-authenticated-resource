@@ -55,7 +55,7 @@ describe('checkRequiredEnv', () => {
 	 * a `toContain` passes an addition, so neither notices the change. The order is asserted too — the
 	 * boot names the *first* missing variable, and that is the one an operator goes looking for. E18-S03.
 	 */
-	it('requires exactly these 15 variables, in this order', () => {
+	it('requires exactly these 16 variables, in this order', () => {
 		expect(REQUIRED_ENV_VARS).toStrictEqual([
 			'PORT',
 			'REDIS_IS_CLUSTER',
@@ -71,7 +71,8 @@ describe('checkRequiredEnv', () => {
 			'MONGODB_URI',
 			'CSFLE_MASTER_KEY_PATH',
 			'CSFLE_KEY_VAULT_NAMESPACE',
-			'INTROSPECTION_CODE'
+			'INTROSPECTION_CODE',
+			'STATIC_FOLDER'
 		])
 	})
 
@@ -89,13 +90,16 @@ describe('checkRequiredEnv', () => {
 	// The *last* entry, so a mutant that stops the loop short is caught and not just one that skips
 	// index 0. It used to be DSN, which is no longer required at all: Sentry is optional, and an
 	// unset DSN leaves the SDK inert rather than stopping the service from serving. Then it was
-	// SAMESITE_COOKIE, which E18-S13 removed as read by nothing — the name has to be the one the list
-	// ends with today, so this assertion moves every time the tail of the list does.
+	// SAMESITE_COOKIE, which E18-S13 removed as read by nothing, then INTROSPECTION_CODE — the name has
+	// to be the one the list ends with today, so this assertion moves every time the tail of the list
+	// does. It ends with STATIC_FOLDER now: `moveFileStaticDomain` interpolates it into the destination
+	// path, and unset it does not fail — the picture lands under a directory literally named
+	// `undefined`, which no vhost serves.
 	it('names a variable missing further down the list', () => {
 		const env = Object.fromEntries(REQUIRED_ENV_VARS.map((k) => [k, 'x']))
-		delete env.INTROSPECTION_CODE
+		delete env.STATIC_FOLDER
 
-		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: INTROSPECTION_CODE')
+		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: STATIC_FOLDER')
 	})
 
 	// Named as literals, because none of the three tests above can see WHICH names the list carries:
