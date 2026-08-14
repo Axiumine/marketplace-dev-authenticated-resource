@@ -13,6 +13,17 @@ exists and serves the domain behind it.
 |---|---|
 | `companyAdd`, `companyUpdate`, `companyDel` | a shop **is** a `company` — there is no separate shop entity and there will not be |
 | `itemAdd`, `itemUpdate`, `itemDel` | catalogue entries, domain-neutral by ADR-008 |
+| `companyUpdatePublished`, `itemUpdatePublished` | the publish switches — see below |
+
+⚠️ **Publishing is a separate operation, not a field of the card.** `published` is deliberately absent
+from `GraphQLInputCompany` and `GraphQLInputItem`: `companyUpdate` and `itemUpdate` `$set` the whole
+object, so a flag inside the input would make every save a write of the flag — and an owner who reopened
+a form loaded before an operator unpublished something would put it straight back without asking to.
+`companyAdd` and `itemAdd` stamp `false`; the two `*UpdatePublished` mutations are the only writers of
+the flag on this tier, matching the operator tier's `itemUpdatePublished` on 4024.
+
+A company also has to be nameable before it can be published: the collection's `$expr` refuses
+`published: true` without both `slug` and `publicName`, so the save comes first and the publish second.
 
 | Queries | |
 |---|---|

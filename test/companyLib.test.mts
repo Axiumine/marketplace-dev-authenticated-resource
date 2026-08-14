@@ -17,6 +17,7 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
 
 const { funCompanyDelete } = await import('../src/lib/company/funCompanyDelete.mts')
 const { funCompanyUpdate } = await import('../src/lib/company/funCompanyUpdate.mts')
+const { funCompanyUpdatePublished } = await import('../src/lib/company/funCompanyUpdatePublished.mts')
 const { throwIfShopOwnerDontOwnCompany } = await import('../src/lib/company/throwIfShopOwnerDontOwnCompany.mts')
 
 const shopOwnerId = new Types.ObjectId('507f1f77bcf86cd799439011')
@@ -29,6 +30,8 @@ function counting(found: number) {
 	return { lean: vi.fn().mockResolvedValue(found) }
 }
 
+// No `published`: it is outside `ICompanyUpdate`, so a whole-object `$set` of a save cannot carry it and
+// `funCompanyUpdatePublished` is the only thing that writes it.
 const data = {
 	legalName: 'Test Boutique Ltd',
 	vatNumber: '01234567890',
@@ -93,6 +96,47 @@ describe('funCompanyUpdate', () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
 
 		await expect(funCompanyUpdate(companyId, shopOwnerId, data)).rejects.toThrow('Internal Server Error')
+	})
+})
+
+describe('funCompanyUpdatePublished', () => {
+	// The same owner-scoped filter as the save, and one field in the update. The exact `$set` is the
+	// assertion that matters: widening this back into a save is exactly the regression the split exists
+	// to prevent.
+	it('writes the flag alone, scoped to its owner', async () => {
+		await expect(funCompanyUpdatePublished(companyId, shopOwnerId, true)).resolves.toBeUndefined()
+
+		expect(companyUpdateOne).toHaveBeenCalledExactlyOnceWith(
+			{ _id: companyId, idShopOwner: shopOwnerId },
+			{ $set: { published: true } }
+		)
+	})
+
+	it('takes the shop off the site with the same call and the flag the other way round', async () => {
+		await expect(funCompanyUpdatePublished(companyId, shopOwnerId, false)).resolves.toBeUndefined()
+
+		expect(companyUpdateOne).toHaveBeenCalledExactlyOnceWith(
+			{ _id: companyId, idShopOwner: shopOwnerId },
+			{ $set: { published: false } }
+		)
+	})
+
+	// `matchedCount`, not `modifiedCount`: publishing a shop that is already published matches one
+	// document and modifies none, and that is the state the owner asked for.
+	it('accepts a publish that changed nothing', async () => {
+		updateExec.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 })
+
+		await expect(funCompanyUpdatePublished(companyId, shopOwnerId, true)).resolves.toBeUndefined()
+	})
+
+	// The ownership guard has already answered 403 for anything not the session's, so nothing matching
+	// here means the company went away in between — a 500, not a client error. The `$expr` refusal of a
+	// shop with no `slug` is a different failure entirely: it rejects the write rather than matching
+	// nothing, and reaches the client through the resolver's `tryCatchRethrow`.
+	it('raises a 500 when the filter matched nothing', async () => {
+		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
+
+		await expect(funCompanyUpdatePublished(companyId, shopOwnerId, true)).rejects.toThrow('Internal Server Error')
 	})
 })
 

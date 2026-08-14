@@ -9,8 +9,12 @@ import { Types } from 'mongoose'
  * `deleted` is in that list. It is optional on `ICompanySchema`, so leaving it in the Omit would make it
  * a legal member of the update object — a type the `$set` below would happily write, and the one way a
  * retired company could be brought back or a live one retired without going through `companyDel`.
+ *
+ * `published` is in it for the same shape of reason: publishing a shop is `companyUpdatePublished`, and
+ * a whole-object `$set` that carried the flag would make every save of the card decide it — including a
+ * save from a form opened before an operator unpublished the shop.
  */
-export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' | 'deleted'>
+export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' | 'deleted' | 'published'>
 
 /**
  * Saves a company, scoped to its owner.

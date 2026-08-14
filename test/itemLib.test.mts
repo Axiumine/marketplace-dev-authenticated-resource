@@ -21,6 +21,7 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 const { shopOwnerCompanyIds } = await import('../src/lib/company/shopOwnerCompanyIds.mts')
 const { funItemDelete } = await import('../src/lib/item/funItemDelete.mts')
 const { funItemUpdate } = await import('../src/lib/item/funItemUpdate.mts')
+const { funItemUpdatePublished } = await import('../src/lib/item/funItemUpdatePublished.mts')
 const { throwIfItemCategoryMissing } = await import('../src/lib/item/throwIfItemCategoryMissing.mts')
 const { throwIfShopOwnerDontOwnItem } = await import('../src/lib/item/throwIfShopOwnerDontOwnItem.mts')
 
@@ -37,9 +38,9 @@ const finding = (docs: unknown[]) => ({ lean: () => ({ exec: vi.fn().mockResolve
 const counting = (found: number) => ({ lean: vi.fn().mockResolvedValue(found) })
 
 /**
- * Both writes go through the same `updateOne` filter — `_id` plus the owner's live companies, and
+ * All three writes go through the same `updateOne` filter — `_id` plus the owner's live companies, and
  * nothing else — so the assertion is shared rather than restated. Returns the update half, which is
- * the only part that differs between a save and a withdrawal.
+ * the only part that differs between a save, a publish and a withdrawal.
  */
 function expectOwnerScopedWrite() {
 	const [filter, update] = itemUpdateOne.mock.calls[0]
@@ -51,13 +52,14 @@ function expectOwnerScopedWrite() {
 	return update
 }
 
+// No `published`: it is outside `IItemUpdate`, so a whole-object `$set` of a save cannot carry the flag
+// and `funItemUpdatePublished` is the only thing that writes it.
 const data = {
 	idCompany,
 	idCategory,
 	name: 'Sneaker',
 	description: 'Baked this morning',
-	slug: 'sneaker',
-	published: true
+	slug: 'sneaker'
 } as never
 
 beforeEach(() => {
@@ -165,6 +167,8 @@ describe('funItemUpdate', () => {
 	// `throwIfShopOwnerDontOwnItem`, refusing the write a second time if the item moved out from under
 	// the session in between. The destination in `data` is the resolver's to check: a filter cannot
 	// check a value it is about to write.
+	// The `$set` is asserted whole, which is also what pins `published` out of it: a save writes the
+	// card and leaves the publish flag exactly where the owner or an operator last put it.
 	it('saves the whole item, scoped to the companies its owner holds', async () => {
 		await expect(funItemUpdate(itemId, shopOwnerId, data)).resolves.toBeUndefined()
 
@@ -183,6 +187,40 @@ describe('funItemUpdate', () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
 
 		await expect(funItemUpdate(itemId, shopOwnerId, data)).rejects.toThrow('Internal Server Error')
+	})
+})
+
+describe('funItemUpdatePublished', () => {
+	// One field and nothing else — that is the whole difference from `funItemUpdate`, and the assertion
+	// on the exact key set of `$set` is what enforces it. A regression that widened this into a save
+	// would bring back the window the split closed.
+	it('writes the flag alone, scoped to the companies its owner holds', async () => {
+		await expect(funItemUpdatePublished(itemId, shopOwnerId, true)).resolves.toBeUndefined()
+
+		expect(expectOwnerScopedWrite()).toEqual({ $set: { published: true } })
+	})
+
+	it('withdraws with the same call and the flag the other way round', async () => {
+		await expect(funItemUpdatePublished(itemId, shopOwnerId, false)).resolves.toBeUndefined()
+
+		expect(expectOwnerScopedWrite()).toEqual({ $set: { published: false } })
+	})
+
+	// `matchedCount`, not `modifiedCount`: publishing something already published matches one document
+	// and modifies none, and that is the state the owner asked for.
+	it('accepts a publish that changed nothing', async () => {
+		updateExec.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 })
+
+		await expect(funItemUpdatePublished(itemId, shopOwnerId, true)).resolves.toBeUndefined()
+	})
+
+	// Unlike the operator tier's 404, this is a 500: `throwIfShopOwnerDontOwnItem` has already answered
+	// 403 for anything the session does not hold, so a filter that matches nothing here means the item
+	// moved between the guard and the write — not a client error.
+	it('raises a 500 when the filter matched nothing', async () => {
+		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
+
+		await expect(funItemUpdatePublished(itemId, shopOwnerId, true)).rejects.toThrow('Internal Server Error')
 	})
 })
 

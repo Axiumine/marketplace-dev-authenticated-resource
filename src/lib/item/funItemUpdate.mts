@@ -12,11 +12,16 @@ import { trusted, Types } from 'mongoose'
  * whole object would then be the one way to retire an item, or revive one, without going through
  * `itemDel`.
  *
+ * `published` is in that list too, and for a related reason: publishing is `itemUpdatePublished`, so a
+ * `$set` of the whole object here must not carry the flag at all. Leaving it in would make every save
+ * of the card a write of the flag, which is the behaviour that let a stale form republish an item an
+ * operator had taken down.
+ *
  * `idCompany` is **not** excluded, unlike `ICompanyUpdate`'s `idShopOwner`. Moving an item between
  * two shops of the same owner is a real operation — a chain reorganising its catalogue — and the
  * resolver checks the destination the same way it checks the source.
  */
-export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted'>
+export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'published'>
 
 /**
  * Saves an item, scoped to the companies its owner holds.

@@ -1,8 +1,8 @@
-import { GraphQLBoolean, GraphQLID, GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
+import { GraphQLID, GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
 
 /**
  * An item as its owner fills it in — every field of `GraphQLItem` except `_id`, which the server
- * mints.
+ * mints, and `published`, which is not part of the card.
  *
  * `idCompany` **is** here, unlike `GraphQLInputCompany`'s missing `idShopOwner`: an owner may hold
  * several companies, so the shop an item belongs to is a choice the client makes rather than
@@ -16,6 +16,12 @@ import { GraphQLBoolean, GraphQLID, GraphQLInputObjectType, GraphQLNonNull, Grap
  * Every field is non-null, matching the collection validator's `required` list — the collection was
  * created empty, so nothing is stranded by demanding them. `funItemUpdate` `$set`s the whole object,
  * so an optional field here would be a field that can never be cleared.
+ *
+ * ⚠️ **`published` is deliberately absent.** Publishing is its own operation on both tiers —
+ * `itemUpdatePublished` here and on 4024 — and not a side effect of saving the card. It used to be a
+ * `Boolean!` in this input, which meant every save wrote the flag: an owner who reopened a stale form
+ * republished an item an operator had just taken down, without ever asking to. `itemAdd` stamps
+ * `false`, and the item stays a draft until someone publishes it on purpose.
  */
 export const GraphQLInputItem = new GraphQLInputObjectType({
 	name: 'GraphQLInputItem',
@@ -26,9 +32,6 @@ export const GraphQLInputItem = new GraphQLInputObjectType({
 		description: { type: new GraphQLNonNull(GraphQLString) },
 		// Unique within the company, not globally: the route is `/shop/:slug/item/:itemSlug`, so the
 		// shop segment already disambiguates and one shop's catalogue never constrains another's.
-		slug: { type: new GraphQLNonNull(GraphQLString) },
-		// Composes with the company's own flag — an item is publicly visible only if both are true —
-		// so publishing an item in a draft shop is legal and simply shows nobody anything.
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
+		slug: { type: new GraphQLNonNull(GraphQLString) }
 	})
 })

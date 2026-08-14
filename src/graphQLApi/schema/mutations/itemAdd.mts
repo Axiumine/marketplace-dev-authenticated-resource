@@ -40,9 +40,12 @@ export const itemAdd = {
 		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args.item.idCompany)
 		await throwIfItemCategoryMissing(args.item.idCategory)
 
+		// `published: false` is stamped here rather than taken from the input: publishing is
+		// `itemUpdatePublished`, a second call the owner makes on purpose. A new item is a draft.
 		const newItem: IItemSchema = {
 			_id: new Types.ObjectId(),
-			...args.item
+			...args.item,
+			published: false
 		}
 
 		// `return await`, not `return`: without the await the promise escapes the try, so the catch
