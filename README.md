@@ -43,8 +43,7 @@ smuggled inside a valid image does not survive it.
 
 ⚠️ **The size cap is 5 MB and it is not configurable from here.** It is `storeUploadAsTemp`'s default
 inside koa-utils, which `uploadTempImage` never overrides; `graphqlUploadKoa`'s 30 MB sits above it and
-never binds, and `MAX_IMAGE_MB` in the `env` template is read by nothing in this service or in that
-library. A larger picture fails inside `uploadTempImage`, which collapses every cause to
+never binds. A larger picture fails inside `uploadTempImage`, which collapses every cause to
 `Error storing image`, so the client is told 500 rather than "too big".
 
 Three steps, **straddling the insert**, and the order is the design: store the upload in the temp

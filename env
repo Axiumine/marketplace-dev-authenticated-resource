@@ -85,8 +85,6 @@ NODE_ENV=development
 
 
 UPLOAD_DIR=/media/xxx
-MAX_IMAGE_MB=20
-MAX_VIDEO_MB=100
 
 # ── The static domain ─────────────────────────────────────────────────────────
 #
@@ -94,7 +92,7 @@ MAX_VIDEO_MB=100
 # STATIC_FOLDER/item/<idCompany>/<_id>.webp, and the document stores the last segment alone — the
 # frontend rebuilds the URL from the two ids it already holds.
 #
-# Required at boot (REQUIRED_ENV_VARS in src/index.mts), unlike the three above, and the reason is that
+# Required at boot (REQUIRED_ENV_VARS in src/index.mts), unlike `UPLOAD_DIR` above, and the reason is that
 # an unset value does not fail: koa-utils' moveFileStaticDomain interpolates it into the destination
 # path, so the directory becomes the literal `undefined/item/...` relative to the process's working
 # directory, fs.ensureDir creates it and the move succeeds. The item then names a picture that exists
@@ -106,9 +104,10 @@ MAX_VIDEO_MB=100
 # checks run in, which is a hardcoded `/tmp` (koa-utils `files/fileConst.mjs`) and holds files that
 # have passed none of them yet.
 #
-# ⚠️ The three variables above are not this feature's. `UPLOAD_DIR`, `MAX_IMAGE_MB` and `MAX_VIDEO_MB`
-# are read by nothing in this service and by nothing in koa-utils' `files/` — raising MAX_IMAGE_MB
-# changes no limit. The picture size cap is 5 MB, hardcoded as `storeUploadAsTemp`'s default, which
+# ⚠️ `UPLOAD_DIR` above is not this feature's, and is read by nothing in this service and by nothing in
+# koa-utils' `files/`. `MAX_IMAGE_MB` and `MAX_VIDEO_MB` stood beside it and are gone for that reason:
+# they named a limit nothing enforced, so raising one changed nothing and reading one misled. The
+# picture size cap is 5 MB, hardcoded as `storeUploadAsTemp`'s default, which
 # `uploadTempImage` never overrides; graphqlUploadKoa's 30 MB in src/index.mts sits above it and so
 # never binds. Over 5 MB the upload answers 500.
 STATIC_FOLDER=/media/xxx/static
