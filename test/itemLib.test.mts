@@ -5,6 +5,7 @@ const companyFind = vi.fn()
 const itemUpdateOne = vi.fn()
 const itemCountDocuments = vi.fn()
 const itemCategoryCountDocuments = vi.fn()
+const itemCategoryFindOneAndUpdate = vi.fn()
 const uploadTempImage = vi.fn()
 
 vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.fn() }))
@@ -16,7 +17,7 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
 	Item: { updateOne: itemUpdateOne, countDocuments: itemCountDocuments }
 }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
-	ItemCategory: { countDocuments: itemCategoryCountDocuments }
+	ItemCategory: { countDocuments: itemCategoryCountDocuments, findOneAndUpdate: itemCategoryFindOneAndUpdate }
 }))
 // Stubbed rather than run: the real one writes the upload to disk, hands it to ClamAV and re-encodes it
 // through sharp. What `storeItemImage` adds on top is the naming, and that is what is under test here.
@@ -26,6 +27,7 @@ const { shopOwnerCompanyIds } = await import('../src/lib/company/shopOwnerCompan
 const { funItemDelete } = await import('../src/lib/item/funItemDelete.mts')
 const { funItemUpdate } = await import('../src/lib/item/funItemUpdate.mts')
 const { funItemUpdatePublished } = await import('../src/lib/item/funItemUpdatePublished.mts')
+const { holdItemCategory } = await import('../src/lib/item/holdItemCategory.mts')
 const { throwIfItemCategoryMissing } = await import('../src/lib/item/throwIfItemCategoryMissing.mts')
 const { throwIfShopOwnerDontOwnItem } = await import('../src/lib/item/throwIfShopOwnerDontOwnItem.mts')
 const { storeItemImage } = await import('../src/lib/item/storeItemImage.mts')
@@ -38,9 +40,37 @@ const idCategory = new Types.ObjectId('507f1f77bcf86cd799439030')
 
 const updateExec = vi.fn()
 
-/** Company.find() ends `.lean().exec()`; countDocuments() ends `.lean()`. */
-const finding = (docs: unknown[]) => ({ lean: () => ({ exec: vi.fn().mockResolvedValue(docs) }) })
+/**
+ * A session double, and the only thing asserted about it is which queries were handed it.
+ *
+ * ⚠️ **A query that does not join the session runs outside the transaction**, against its own snapshot,
+ * and nothing about the result says so — the call succeeds, the numbers look right, and the guarantee is
+ * gone. `threaded` records every `.session()` argument in call order so a dropped hop fails a test
+ * instead of quietly widening a window.
+ */
+const session = { id: 'the session' } as never
+const threaded: unknown[] = []
+
+/** `.session()` is a hop on the chain: it records what it was given and answers the rest of the chain. */
+const sessioned = (tail: object) => ({
+	session: vi.fn((clientSession: unknown) => {
+		threaded.push(clientSession)
+
+		return tail
+	})
+})
+
+/** Company.find() ends `.session().lean().exec()`; countDocuments() ends `.lean()`. */
+const finding = (docs: unknown[]) => sessioned({ lean: () => ({ exec: vi.fn().mockResolvedValue(docs) }) })
 const counting = (found: number) => ({ lean: vi.fn().mockResolvedValue(found) })
+/** findOneAndUpdate() ends `.session().lean()` — no `.exec()`, the chain is awaited as it stands. */
+const holding = (doc: unknown) => sessioned({ lean: vi.fn().mockResolvedValue(doc) })
+
+/**
+ * updateOne() is chained two ways in this repo: `funItemUpdate` joins the session first, the publish and
+ * the withdrawal go straight to `.exec()`. Both tails answer the same `updateExec`.
+ */
+const updating = () => ({ ...sessioned({ exec: updateExec }), exec: updateExec })
 
 /**
  * All three writes go through the same `updateOne` filter — `_id` plus the owner's live companies, and
@@ -69,11 +99,13 @@ const data = {
 
 beforeEach(() => {
 	companyFind.mockReset().mockReturnValue(finding([{ _id: idCompany }, { _id: idOtherCompany }]))
-	itemUpdateOne.mockReset().mockReturnValue({ exec: updateExec })
+	itemUpdateOne.mockReset().mockReturnValue(updating())
 	updateExec.mockReset().mockResolvedValue({ matchedCount: 1 })
 	itemCountDocuments.mockReset().mockReturnValue(counting(1))
 	itemCategoryCountDocuments.mockReset().mockReturnValue(counting(1))
+	itemCategoryFindOneAndUpdate.mockReset().mockReturnValue(holding({ _id: idCategory }))
 	uploadTempImage.mockReset()
+	threaded.length = 0
 })
 
 describe('storeItemImage', () => {
@@ -125,6 +157,22 @@ describe('shopOwnerCompanyIds', () => {
 		expect(filter.deleted).toEqual(trusted({ $exists: false }))
 		expect(Object.keys(filter).sort()).toEqual(['deleted', 'idShopOwner'])
 		expect(projection).toEqual({ _id: 1 })
+	})
+
+	// ⚠️ The session is optional and defaults to `null`, which mongoose reads as "no session" — so the
+	// hop is unconditional and the four callers outside a transaction need no branch. `funItemUpdate` is
+	// the one that passes a session, and its filter has to be built from the same snapshot as the write
+	// it scopes, or the two read different states of the owner's companies.
+	it('runs outside any transaction unless it is handed a session', async () => {
+		await shopOwnerCompanyIds(shopOwnerId)
+
+		expect(threaded).toEqual([null])
+	})
+
+	it('joins the caller’s transaction when it is handed one', async () => {
+		await shopOwnerCompanyIds(shopOwnerId, session)
+
+		expect(threaded).toEqual([session])
 	})
 
 	// An owner with no company is not an error — it is the refusal every caller wants, because `$in: []`
@@ -202,6 +250,56 @@ describe('throwIfItemCategoryMissing', () => {
 	})
 })
 
+describe('holdItemCategory', () => {
+	// ⚠️ **A read would not have closed the race, which is why this is a write.** `funItemCategoryDelete`
+	// on 4024 counts the items filed under a category and stamps `deleted` when it finds none; an insert
+	// here that only *read* the category commits alongside that stamp, because MongoDB transactions are
+	// snapshot-isolated rather than serialisable and both sides saw a consistent snapshot. `$inc` makes
+	// this transaction a writer of the document the delete writes, so the server aborts one of them with a
+	// `WriteConflict` and `withTransaction` retries it.
+	//
+	// The assertion is on the exact update, not on the call alone: a mutant that dropped the `$inc` for an
+	// empty update would still find the document and still pass a check that only looked at the filter.
+	it('takes the category as a write, so a concurrent delete collides with it', async () => {
+		await expect(holdItemCategory(idCategory, session)).resolves.toBeUndefined()
+
+		const [filter, update, options] = itemCategoryFindOneAndUpdate.mock.calls[0]
+		expect(itemCategoryFindOneAndUpdate).toHaveBeenCalledOnce()
+		expect(filter._id).toBe(idCategory)
+		// A retired category is invisible to every read path, so filing an item under one would produce an
+		// item no listing can reach — the same clause the cheap pre-flight carries.
+		expect(filter.deleted).toEqual(trusted({ $exists: false }))
+		expect(Object.keys(filter).sort()).toEqual(['_id', 'deleted'])
+		// `__v` because nothing reads it: mongoose maintains it for `save()` on documents with arrays,
+		// this collection is never written that way, and the validator already declares it an int.
+		expect(update).toEqual({ $inc: { __v: 1 } })
+		// The answer needed is whether the document is there; the category's own fields are none of this
+		// service's business, and pulling them would put the whole taxonomy row on the wire per item write.
+		expect(options).toEqual({ projection: { _id: 1 } })
+	})
+
+	// ⚠️ Held *inside* the caller's transaction or held for nothing: a hop taken against the default
+	// session writes the category in a transaction of its own, which commits immediately and collides with
+	// no one.
+	it('takes it inside the caller’s transaction', async () => {
+		await holdItemCategory(idCategory, session)
+
+		expect(threaded).toEqual([session])
+	})
+
+	// 404 rather than 403, for the reason the pre-flight gives: the taxonomy is platform-wide public data,
+	// so a missing category is a stale client or a typo. A retired one is missing — `deleted` is in the
+	// filter — which is also how the loser of the race answers after its retry.
+	it('answers 404 when the category is absent or retired', async () => {
+		itemCategoryFindOneAndUpdate.mockReturnValueOnce(holding(null))
+
+		await expect(holdItemCategory(idCategory, session)).rejects.toMatchObject({
+			message: 'Oops',
+			extensions: { http: { status: 404 } }
+		})
+	})
+})
+
 describe('funItemUpdate', () => {
 	// ⚠️ The `idCompany` clause reads the STORED item, not the update — defence in depth behind
 	// `throwIfShopOwnerDontOwnItem`, refusing the write a second time if the item moved out from under
@@ -210,9 +308,18 @@ describe('funItemUpdate', () => {
 	// The `$set` is asserted whole, which is also what pins `published` out of it: a save writes the
 	// card and leaves the publish flag exactly where the owner or an operator last put it.
 	it('saves the whole item, scoped to the companies its owner holds', async () => {
-		await expect(funItemUpdate(itemId, shopOwnerId, data)).resolves.toBeUndefined()
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toBeUndefined()
 
 		expect(expectOwnerScopedWrite()).toEqual({ $set: data })
+	})
+
+	// ⚠️ Both queries join the session, not just the write. The filter is built from
+	// `shopOwnerCompanyIds`, so a company read taken outside the transaction would scope the update by a
+	// different snapshot than the one the update commits in.
+	it('runs the company read and the write in the caller’s transaction', async () => {
+		await funItemUpdate(itemId, shopOwnerId, data, session)
+
+		expect(threaded).toEqual([session, session])
 	})
 
 	// `matchedCount`, not `modifiedCount`: saving an item unchanged matches one document and modifies
@@ -220,13 +327,13 @@ describe('funItemUpdate', () => {
 	it('accepts a save that changed nothing', async () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 })
 
-		await expect(funItemUpdate(itemId, shopOwnerId, data)).resolves.toBeUndefined()
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toBeUndefined()
 	})
 
 	it('raises a 500 when the filter matched nothing', async () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
 
-		await expect(funItemUpdate(itemId, shopOwnerId, data)).rejects.toThrow('Internal Server Error')
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).rejects.toThrow('Internal Server Error')
 	})
 
 	// ⚠️ The type says this cannot happen and the wire says otherwise. `GraphQLInputItem` declares
@@ -241,7 +348,7 @@ describe('funItemUpdate', () => {
 	it('never writes an image, whatever the client sent under that key', async () => {
 		const withUpload = { ...(data as object), image: Promise.resolve({ filename: 'shoe.jpg' }) } as never
 
-		await expect(funItemUpdate(itemId, shopOwnerId, withUpload)).resolves.toBeUndefined()
+		await expect(funItemUpdate(itemId, shopOwnerId, withUpload, session)).resolves.toBeUndefined()
 
 		expect(expectOwnerScopedWrite()).toEqual({ $set: data })
 	})
@@ -252,7 +359,7 @@ describe('funItemUpdate', () => {
 		const image = Promise.resolve({ filename: 'shoe.jpg' })
 		const withUpload = { ...(data as object), image } as never
 
-		await funItemUpdate(itemId, shopOwnerId, withUpload)
+		await funItemUpdate(itemId, shopOwnerId, withUpload, session)
 
 		expect((withUpload as { image?: unknown }).image).toBe(image)
 	})
