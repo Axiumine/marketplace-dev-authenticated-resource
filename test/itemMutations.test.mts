@@ -15,6 +15,30 @@ const funItemUpdatePublished = vi.fn()
 const funItemDelete = vi.fn()
 const storeItemImage = vi.fn()
 const moveFileStaticDomain = vi.fn()
+const holdItemCategory = vi.fn()
+
+/**
+ * The session both writing mutations open, and the transaction they run inside it.
+ *
+ * `withTransaction` runs the callback once, which is what a first attempt that commits looks like. Three
+ * tests replace it: one to watch what has already happened by the time it opens, one to run the callback
+ * twice the way a `WriteConflict` retry does, and one to fail it outright.
+ *
+ * `vi.hoisted` because `vi.mock`'s factory is lifted above every `const` in this file, and the mongoose
+ * mock has to be able to name `startSession`.
+ */
+const { endSession, session, startSession, withTransaction } = vi.hoisted(() => {
+	const endSessionFn = vi.fn()
+	const withTransactionFn = vi.fn(async (work: () => Promise<void>) => await work())
+	const sessionObj = { withTransaction: withTransactionFn, endSession: endSessionFn }
+
+	return {
+		endSession: endSessionFn,
+		session: sessionObj,
+		startSession: vi.fn(async () => sessionObj),
+		withTransaction: withTransactionFn
+	}
+})
 
 // tryCatchRethrow is deliberately NOT mocked, as in `mutations.test.mts`: turning a driver error into
 // the right GraphQL status is the behaviour under test. Only Sentry is stubbed.
@@ -23,6 +47,14 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({ Item: { cre
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))
 vi.mock('@lib/item/throwIfShopOwnerDontOwnItem.mjs', () => ({ throwIfShopOwnerDontOwnItem }))
 vi.mock('@lib/item/throwIfItemCategoryMissing.mjs', () => ({ throwIfItemCategoryMissing }))
+vi.mock('@lib/item/holdItemCategory.mjs', () => ({ holdItemCategory }))
+// Only `startSession` is replaced. `Types.ObjectId` is used by the resolvers under test and by this file
+// itself, so a wholly synthetic mongoose would take it away.
+vi.mock('mongoose', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('mongoose')>()
+
+	return { ...actual, default: { ...actual.default, startSession } }
+})
 vi.mock('@lib/item/funItemUpdate.mjs', () => ({ funItemUpdate }))
 vi.mock('@lib/item/funItemUpdatePublished.mjs', () => ({ funItemUpdatePublished }))
 vi.mock('@lib/item/funItemDelete.mjs', () => ({ funItemDelete }))
@@ -84,7 +116,10 @@ function run(mutation: Resolver, args: unknown) {
 
 beforeEach(() => {
 	vi.clearAllMocks()
-	itemCreate.mockResolvedValue({ _id: itemId })
+	// The array form, because that is the only one that carries options and the session has to be one.
+	// What it answers is deliberately not what the resolver returns — see the test below.
+	itemCreate.mockResolvedValue([{ _id: itemId }])
+	holdItemCategory.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
 	throwIfItemCategoryMissing.mockResolvedValue(undefined)
@@ -99,14 +134,78 @@ describe('itemAdd', () => {
 	// `idCompany` is client-supplied — it has to be, an owner may hold several shops — so the ownership
 	// guard is the only thing between this mutation and stocking a stranger's shop.
 	it('checks the shop then the category, and creates the item with a fresh _id', async () => {
-		await expect(run(itemAdd, { item })).resolves.toEqual({ _id: itemId })
+		const created = (await run(itemAdd, { item })) as { _id: Types.ObjectId }
 
 		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
 		expect(throwIfItemCategoryMissing).toHaveBeenCalledExactlyOnceWith(idCategory)
 
-		const [doc] = itemCreate.mock.calls[0]
+		const [[doc], options] = itemCreate.mock.calls[0]
 		expect(doc).toMatchObject(item)
 		expect(doc._id).toBeInstanceOf(Types.ObjectId)
+		expect(options).toEqual({ session })
+
+		// The answer is the id this resolver minted, not whatever `create` echoed back — the array form
+		// answers an array, and the id is a value the resolver already holds.
+		expect(created._id).toBe(doc._id)
+	})
+
+	// ⚠️ The second half of the cross-service rule `funItemCategoryDelete` enforces on 4024: that delete
+	// refuses to retire a category while a live item points at it, and it counts those items in its own
+	// transaction. An insert that does not touch the category commits straight past that count — snapshot
+	// isolation permits the write skew — and leaves an item filed under a category no read path returns.
+	// `holdItemCategory` writes the category, so the two collide and one of them is retried.
+	it('holds the category inside the transaction that carries the insert', async () => {
+		await run(itemAdd, { item })
+
+		expect(withTransaction).toHaveBeenCalledOnce()
+		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
+		expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+	})
+
+	// The category can be retired between the cheap pre-flight and the insert — that window is the whole
+	// reason the hold exists — and the answer is the same 404 the pre-flight gives.
+	it('does not write when the category was retired between the check and the insert', async () => {
+		holdItemCategory.mockRejectedValueOnce(notFound())
+
+		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
+			extensions: { http: { status: 404 } }
+		})
+		expect(itemCreate).not.toHaveBeenCalled()
+		expect(moveFileStaticDomain).not.toHaveBeenCalled()
+	})
+
+	// ⚠️ `withTransaction` re-runs its callback on a `WriteConflict`, so anything inside it can happen
+	// twice — which is why neither the scan nor the move is. The upload runs once, ahead of the
+	// transaction, and the retry writes the same document rather than minting a second `_id` that would
+	// no longer match the file already named after the first.
+	it('scans the upload once, and re-uses the minted _id when the transaction is retried', async () => {
+		withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+			await work()
+			await work()
+		})
+
+		await run(itemAdd, { item: { ...item, image: upload } })
+
+		const [[first]] = itemCreate.mock.calls[0]
+		const [[second]] = itemCreate.mock.calls[1]
+		expect(second._id).toBe(first._id)
+		expect(storeItemImage).toHaveBeenCalledOnce()
+		expect(moveFileStaticDomain).toHaveBeenCalledOnce()
+	})
+
+	// The other half of the same rule, from inside: by the time the transaction opens the file is already
+	// scanned and re-encoded, and nothing has been published. A `rename` is not undone by an abort.
+	it('leaves the scan behind it and the move ahead of it when the transaction opens', async () => {
+		withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+			expect(storeItemImage).toHaveBeenCalledOnce()
+			expect(moveFileStaticDomain).not.toHaveBeenCalled()
+
+			await work()
+		})
+
+		await run(itemAdd, { item: { ...item, image: upload } })
+
+		expect(moveFileStaticDomain).toHaveBeenCalledOnce()
 	})
 
 	// The client cannot send the flag, so the resolver has to write one — `published` is `required` on
@@ -115,7 +214,7 @@ describe('itemAdd', () => {
 	it('stamps the new item as an unpublished draft', async () => {
 		await run(itemAdd, { item })
 
-		const [doc] = itemCreate.mock.calls[0]
+		const [[doc]] = itemCreate.mock.calls[0]
 		expect(doc.published).toBe(false)
 	})
 
@@ -128,7 +227,7 @@ describe('itemAdd', () => {
 		expect(storeItemImage).not.toHaveBeenCalled()
 		expect(moveFileStaticDomain).not.toHaveBeenCalled()
 
-		const [doc] = itemCreate.mock.calls[0]
+		const [[doc]] = itemCreate.mock.calls[0]
 		expect(doc.image).toBeUndefined()
 	})
 
@@ -138,9 +237,10 @@ describe('itemAdd', () => {
 	// together with the `_id` the resolver has just minted, so the picture is named after the item
 	// rather than after whatever the client called its file.
 	it('stores the picture, writes the item, then publishes the file under the shop', async () => {
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).resolves.toEqual({ _id: itemId })
+		const created = (await run(itemAdd, { item: { ...item, image: upload } })) as { _id: Types.ObjectId }
 
-		const [doc] = itemCreate.mock.calls[0]
+		const [[doc]] = itemCreate.mock.calls[0]
+		expect(created._id).toBe(doc._id)
 		expect(storeItemImage).toHaveBeenCalledExactlyOnceWith(upload, doc._id)
 
 		// The document carries the file name and nothing else about the picture: not a path, not a URL,
@@ -212,6 +312,8 @@ describe('itemAdd', () => {
 		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
 		expect(storeItemImage).not.toHaveBeenCalled()
 		expect(itemCreate).not.toHaveBeenCalled()
+		// The guards are ahead of the session too: a refused request must not open a transaction.
+		expect(startSession).not.toHaveBeenCalled()
 	})
 
 	it('does not write when the category does not exist', async () => {
@@ -219,6 +321,8 @@ describe('itemAdd', () => {
 
 		await expect(run(itemAdd, { item })).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
 		expect(itemCreate).not.toHaveBeenCalled()
+		expect(storeItemImage).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
 	})
 
 	// `{ idCompany, slug }` is unique, so a slug already used in this shop fails here — and has to reach
@@ -259,8 +363,26 @@ describe('itemUpdate', () => {
 
 		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
 		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
-		expect(throwIfItemCategoryMissing).toHaveBeenCalledExactlyOnceWith(idCategory)
-		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, userId, item)
+		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
+		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, userId, item, session)
+	})
+
+	// ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
+	// under a category an operator is retiring in the same instant has to collide with that delete rather
+	// than commit past it. The hold comes first: there is no point writing the item to find out.
+	it('holds the category and saves inside one transaction', async () => {
+		await run(itemUpdate, args)
+
+		expect(withTransaction).toHaveBeenCalledOnce()
+		expect(funItemUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+	})
+
+	// Unlike `itemAdd` there is no upload to refuse ahead of, so the cheap pre-flight would be a second
+	// round trip buying nothing. The holding call is the only category check on this path.
+	it('does not ask the category question a second, cheaper time', async () => {
+		await run(itemUpdate, args)
+
+		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
 	})
 
 	it('does not write, or check the destination, when the item is not the caller’s', async () => {
@@ -269,6 +391,7 @@ describe('itemUpdate', () => {
 		await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 		expect(funItemUpdate).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
 	})
 
 	// The transfer half: the caller owns the item and names a shop that is not theirs.
@@ -276,12 +399,13 @@ describe('itemUpdate', () => {
 		throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
 
 		await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+		expect(holdItemCategory).not.toHaveBeenCalled()
 		expect(funItemUpdate).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
 	})
 
-	it('does not write when the category does not exist', async () => {
-		throwIfItemCategoryMissing.mockRejectedValueOnce(notFound())
+	it('does not write when the category does not exist, or was retired under the save', async () => {
+		holdItemCategory.mockRejectedValueOnce(notFound())
 
 		await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
 		expect(funItemUpdate).not.toHaveBeenCalled()
@@ -317,6 +441,9 @@ describe('itemUpdatePublished', () => {
 		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+		// Nothing is re-filed, so nothing holds the category and no transaction is opened either.
+		expect(holdItemCategory).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
 		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, userId, true)
 	})
 
@@ -361,6 +488,9 @@ describe('itemDel', () => {
 
 		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
 		expect(funItemDelete).toHaveBeenCalledExactlyOnceWith(itemId, userId)
+		// A withdrawal leaves `idCategory` where it is, so it races nothing on the taxonomy.
+		expect(holdItemCategory).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
 	})
 
 	// The guard filters `deleted`, so a second call on the same item answers 403 rather than repeating
@@ -378,5 +508,30 @@ describe('itemDel', () => {
 
 		await expect(run(itemDel, { _id: itemId })).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+})
+
+// A session that is opened and not ended is a connection the driver never gets back, and the mutations
+// that open one can fail in three places: the hold, the write, and the transaction itself. `finally` is
+// what makes the third case survivable, and only a test that fails the transaction says so.
+describe('the session the two writing mutations open', () => {
+	const paths: [string, () => Promise<unknown>][] = [
+		['itemAdd', () => run(itemAdd, { item }) as Promise<unknown>],
+		['itemUpdate', () => run(itemUpdate, { _id: itemId, item }) as Promise<unknown>]
+	]
+
+	it.each(paths)('%s opens one session, runs one transaction in it and ends it', async (_name, call) => {
+		await call()
+
+		expect(startSession).toHaveBeenCalledOnce()
+		expect(withTransaction).toHaveBeenCalledOnce()
+		expect(endSession).toHaveBeenCalledOnce()
+	})
+
+	it.each(paths)('%s ends the session when the transaction fails', async (_name, call) => {
+		withTransaction.mockRejectedValueOnce(driverError)
+
+		await expect(call()).rejects.toThrow('Internal Server Error')
+		expect(endSession).toHaveBeenCalledOnce()
 	})
 })

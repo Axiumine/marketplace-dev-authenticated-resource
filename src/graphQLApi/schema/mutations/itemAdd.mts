@@ -8,10 +8,11 @@ import { GraphQLInputItem } from '@GraphQLInput/GraphQLInputItem.mjs'
 import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOwnerAuthenticatedResource.mjs'
 import { throwIfShopOwnerDontOwnCompany } from '@lib/company/throwIfShopOwnerDontOwnCompany.mjs'
 import { IItemUpdate } from '@lib/item/funItemUpdate.mjs'
+import { holdItemCategory } from '@lib/item/holdItemCategory.mjs'
 import { storeItemImage } from '@lib/item/storeItemImage.mjs'
 import { throwIfItemCategoryMissing } from '@lib/item/throwIfItemCategoryMissing.mjs'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
-import { Types } from 'mongoose'
+import mongoose, { Types } from 'mongoose'
 
 /**
  * The card, plus the one member of `GraphQLInputItem` that is not part of it.
@@ -35,6 +36,14 @@ interface IArgs {
  * Ownership first, existence second: a caller who does not own the shop learns nothing about which
  * category ids are real.
  *
+ * ⚠️ **The category is checked twice, and the second one is the check that holds.** The guard above is a
+ * count, and it is here to refuse early — ahead of an upload that writes a file, scans it with ClamAV and
+ * re-encodes it. `holdItemCategory` asks the same question inside the transaction that carries the
+ * insert, and it asks it with a write, so an operator retiring that category at the same instant collides
+ * with this insert instead of committing past it. Without it `funItemCategoryDelete` on 4024 can count
+ * zero live items, stamp `deleted`, and leave the item created in that instant filed under a category no
+ * read path returns. See `holdItemCategory` for why a transaction on its own would not have closed it.
+ *
  * Answers the new `_id`, like `companyAdd` and unlike the operator tier's `Boolean` — the owner's
  * flow continues with the item that was just created, and the id is what the next step needs.
  *
@@ -48,6 +57,12 @@ interface IArgs {
  *    the result after the `_id` this resolver has already minted.
  * 2. `Item.create` writes the document, carrying that file name.
  * 3. `moveFileStaticDomain` publishes the file into `STATIC_FOLDER/item/<idCompany>/`.
+ *
+ * ⚠️ **Only step 2 is inside the transaction, and the other two must stay outside it.** A scan and a
+ * `rename` are not undone by an abort, and `withTransaction` re-runs its callback on a `WriteConflict` —
+ * a step inside it is a step that can happen twice. The upload runs before the transaction opens because
+ * the document carries its file name; the move runs after it commits, which is a stronger form of the
+ * order below rather than a change to it.
  *
  * ⚠️ **Nothing reaches the static domain before the document exists.** A slug already taken in this
  * shop is the ordinary failure here — `idCompany_slug_unique` — and it fails at step 2, leaving the
@@ -67,6 +82,10 @@ interface IArgs {
  * shop — would surface as an unhandled rejection instead of the 409 `tryCatchRethrow` makes of it. A
  * failed upload takes the same road and becomes a 500 with the cause in Sentry, which is the reason the
  * upload is inside the block rather than above it.
+ *
+ * The answer is the `_id` this resolver minted rather than whatever `create` echoes back: the array form
+ * — the only one that carries options, and the session has to be one of them — answers an array, and the
+ * id is a value this function already holds.
  */
 export const itemAdd = {
 	type: new GraphQLNonNull(OnlyIdType),
@@ -82,6 +101,7 @@ export const itemAdd = {
 		// key is a promise of a stream, and the document takes a file name.
 		const { image, ...card } = args.item
 		const _id = new Types.ObjectId()
+		const session = await mongoose.startSession()
 
 		try {
 			// Before the insert, and after both guards: an upload is expensive — it writes a file, scans it
@@ -101,9 +121,13 @@ export const itemAdd = {
 				image: stored?.fileName
 			}
 
-			const created = await Item.create(newItem)
+			await session.withTransaction(async () => {
+				await holdItemCategory(card.idCategory, session)
 
-			// Only now, with the document on disk, does the picture become publicly reachable. The two
+				await Item.create([newItem], { session })
+			})
+
+			// Only now, with the document committed, does the picture become publicly reachable. The two
 			// path segments are fixed by the server: `item` is a literal, and `idCompany` is an id
 			// `throwIfShopOwnerDontOwnCompany` has just matched against a real company of this session —
 			// a malformed one never gets this far, and `moveFileStaticDomain` re-checks both for
@@ -115,9 +139,11 @@ export const itemAdd = {
 				await moveFileStaticDomain(stored.tempFile, 'item', String(card.idCompany), stored.destBaseName)
 			}
 
-			return created
+			return { _id }
 		} catch (e) {
 			tryCatchRethrow(e as GraphQLError | Error)
+		} finally {
+			await session.endSession()
 		}
 	}
 }

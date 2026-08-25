@@ -2,7 +2,7 @@ import { throwInternalError } from '@axiumine/koa-utils/graphQL/throw/throwInter
 import { Item } from '@axiumine/marketplace-common/models/MongoDB/Item'
 import { IItemSchema } from '@axiumine/marketplace-common/models/MongoDBInterfaces/IItemSchema'
 import { shopOwnerCompanyIds } from '@lib/company/shopOwnerCompanyIds.mjs'
-import { trusted, Types } from 'mongoose'
+import { ClientSession, trusted, Types } from 'mongoose'
 
 /**
  * Everything the owner may change about an item: its fields, minus the ones the server owns.
@@ -51,17 +51,30 @@ export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'publish
  *
  * Changing an item's picture is not this mutation's job either way. There is no replace path yet —
  * `itemAdd` is the only writer of the field — so this drops rather than diverts.
+ *
+ * ⚠️ **The session is not optional, and the write is only half of what it carries.** The resolver opens
+ * one transaction over `holdItemCategory` and this save, so that a save which files an item under a
+ * category collides with an operator retiring that same category instead of committing past it. Both
+ * queries here join it — the company read as much as the update, or the filter would be built from a
+ * different snapshot than the write it scopes.
  */
-export async function funItemUpdate(itemId: Types.ObjectId, shopOwnerId: Types.ObjectId, data: IItemUpdate) {
+export async function funItemUpdate(
+	itemId: Types.ObjectId,
+	shopOwnerId: Types.ObjectId,
+	data: IItemUpdate,
+	session: ClientSession
+) {
 	// A copy with the key removed, rather than a rest-destructure: the discarded half of
 	// `const { image, ...card } =` is a binding nothing reads, and `no-unused-vars` is an error here.
 	const card: Partial<IItemUpdate & { image?: unknown }> = { ...data }
 	delete card.image
 
 	const ret = await Item.updateOne(
-		{ _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
+		{ _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId, session) }) },
 		{ $set: card }
-	).exec()
+	)
+		.session(session)
+		.exec()
 
 	if (ret.matchedCount !== 1) {
 		throwInternalError()
