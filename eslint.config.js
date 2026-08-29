@@ -8,6 +8,129 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 // TypeScript block, but without `project`: tsconfig.json only includes `src/**/*.mts`.
 const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts,ts,cts,mts}'))
 
+/*
+ * ADR-044. Suspension is the operator's instrument end to end: the Admin tier raises it, and the Admin
+ * tier is the only hand that lifts it — *"if admin suspend an account, admin must remove the suspension
+ * for allow the shopowner to log in again"*. A ShopOwner-tier service able to write any `disabled*`
+ * field could clear a sanction standing against the very account making the request, which is the same
+ * argument `APPROVAL_GATE_FIELD_SHOP_OWNER` makes for `waitApprov`, and it earns the same lock.
+ *
+ * ⚠️ **A write ban, not a ban.** Reading the flag is what `checkUserAuthorizationDisDel` does at login
+ * and `findAccountForSession` does on every refresh, and those two reads are the enforcement — a rule
+ * refusing them would refuse the gate. Hence four write shapes and no read shape: the object-literal key
+ * a `$set` is built from, the same key written as a string, and both assignment forms
+ * (`owner.disabled = false`, `owner['disabled'] = false`), which is the shape the E12-S04 audit actually
+ * found for `rejectUnauthorized` and which a `Property`-only rule passes.
+ *
+ * `ObjectExpression >` rather than a bare `Property`, because an `ObjectPattern` is a `Property` too and
+ * destructuring the flag off a document that was just read is a read. The collateral this accepts is the
+ * object form of a Mongoose projection — `.select({ disabled: 1 })` is indistinguishable from a `$set`
+ * at this level and is refused with it. Nothing here uses that form: every projection on the platform is
+ * the space-separated string, which no selector below touches.
+ *
+ * The three names are `shopOwner`'s real ones, from `BEs/marketplace-db-setup/lib/schemas/account.js`.
+ * There is no `disabledAt` — ADR-044 names one in prose as a shape it would also cover, and the schema
+ * never grew it, so banning the name would be banning nothing.
+ *
+ * Scoped to `src/**` where it is used below: a test proving a suspended owner is refused has to seed
+ * `disabled: true`, and a fixture is an object literal like any other.
+ */
+const DISABLED_NO_WRITE = [
+	{
+		selector:
+			'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
+		message:
+			"ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an operator removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
+	}
+]
+
+/* Hoisted so both config objects below can share it — see the note above the second one. */
+const RESTRICTED_SYNTAX = [
+	{
+		selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.name='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.value='rejectUnauthorized']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Property[key.name='sendDefaultPii']",
+		message:
+			'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
+	},
+	// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
+	// notice. `!=` rather than a positive match because the shape to refuse is *any other
+	// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
+	// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
+	// `beforeSend` cannot satisfy it on the outer literal's behalf.
+	{
+		selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
+		message:
+			"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
+	},
+	{
+		selector: "ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
+		message:
+			'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
+	},
+	{
+		selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	{
+		selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
+		message:
+			'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+	},
+	// E01-S10 — the two `shopOwner` fields the Admin tier owns outright, refused here so that "no
+	// ShopOwner-tier service selects them" stops being a claim about how the code happens to be
+	// written today. `notes` is free text an operator wrote *about* a named person, encrypted at rest
+	// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
+	// is BC-03's approval gate itself: a service that could write it could approve its own account.
+	//
+	// ⚠️ The two authorization services carry a narrower `waitApprov` rule than this one — a write
+	// ban only, scoped to their `src/**` — because `checkShopOwnerApproval` runs at login and on
+	// every refresh, and a rule refusing the read would refuse the gate. Nothing changes here: by
+	// the time a request reaches this service its session has already been through that gate, so a
+	// resource resolver reading the flag would be re-deciding a question already answered, on a
+	// field it has no other business with. Keep all four shapes.
+	//
+	// The list and the whole argument live on `OPERATOR_ONLY_FIELDS_SHOP_OWNER` in
+	// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
+	// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
+	// `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
+	// honest is the test in that repo asserting both names still resolve to real paths on
+	// `ShopOwnerSchema`, so a rename fails in the repo that owns the shape rather than silently
+	// leaving three selectors pointing at a field that no longer exists.
+	//
+	// Four shapes per field, because the projection is the one that matters and it is none of the
+	// other three: a Mongoose projection is a single space-separated string, where the field name is
+	// neither a key nor a member — hence `Literal` with a word-bounded regex rather than a bare
+	// substring, which would also fire on any prose mentioning the field. `TSPropertySignature` is
+	// the step before it, where the interface the projection is typed against grows the field first.
+	{
+		selector:
+			"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
+		message:
+			"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an operator wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+	},
+	{
+		selector:
+			"Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
+		message:
+			"E01-S10: `shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and a resource resolver has no reason to read it either: checkShopOwnerApproval already ran at login and runs again on every refresh, so a session that reached this service is approved by construction. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER in marketplace-common."
+	}
+]
+
 export default [
 	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
 	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
@@ -67,7 +190,8 @@ export default [
 	// nothing. One block duplicated into ten repos is the cheaper half of that trade, and it follows the
 	// idiom the two blocks above already established.
 	//
-	// No `files` key, so this applies to every file eslint looks at here. Three selectors for
+	// No `files` key on the first object, so the shared entries apply to every file eslint looks at
+	// here; the second one narrows to src/** and adds the write ban that belongs there alone. Three selectors for
 	// `rejectUnauthorized` because the defect actually in the tree was an assignment
 	// (`options.rejectUnauthorized = false`), not an object literal — a `Property`-only rule passes the
 	// exact code it exists to catch — and the computed form has a `key.value` where the plain one has a
@@ -76,93 +200,17 @@ export default [
 	// misses the other.
 	{
 		rules: {
-			'no-restricted-syntax': [
-				'error',
-				{
-					selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.name='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.value='rejectUnauthorized']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Property[key.name='sendDefaultPii']",
-					message:
-						'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
-				},
-				// E12-S21 / E12-S22. Two settings one word from being reversed, with nothing else that would
-				// notice. `!=` rather than a positive match because the shape to refuse is *any other
-				// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
-				// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
-				// `beforeSend` cannot satisfy it on the outer literal's behalf.
-				{
-					selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
-					message:
-						"E12-S21: the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
-				},
-				{
-					selector:
-						"ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
-					message:
-						'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
-				},
-				{
-					selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				{
-					selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
-					message:
-						'E12-S04: certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-				},
-				// E01-S10 — the two `shopOwner` fields the Admin tier owns outright, refused here so that "no
-				// ShopOwner-tier service selects them" stops being a claim about how the code happens to be
-				// written today. `notes` is free text an operator wrote *about* a named person, encrypted at rest
-				// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
-				// is BC-03's approval gate itself: a service that could write it could approve its own account.
-				//
-				// ⚠️ The two authorization services carry a narrower `waitApprov` rule than this one — a write
-				// ban only, scoped to their `src/**` — because `checkShopOwnerApproval` runs at login and on
-				// every refresh, and a rule refusing the read would refuse the gate. Nothing changes here: by
-				// the time a request reaches this service its session has already been through that gate, so a
-				// resource resolver reading the flag would be re-deciding a question already answered, on a
-				// field it has no other business with. Keep all four shapes.
-				//
-				// The list and the whole argument live on `OPERATOR_ONLY_FIELDS_SHOP_OWNER` in
-				// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
-				// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
-				// `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
-				// honest is the test in that repo asserting both names still resolve to real paths on
-				// `ShopOwnerSchema`, so a rename fails in the repo that owns the shape rather than silently
-				// leaving three selectors pointing at a field that no longer exists.
-				//
-				// Four shapes per field, because the projection is the one that matters and it is none of the
-				// other three: a Mongoose projection is a single space-separated string, where the field name is
-				// neither a key nor a member — hence `Literal` with a word-bounded regex rather than a bare
-				// substring, which would also fire on any prose mentioning the field. `TSPropertySignature` is
-				// the step before it, where the interface the projection is typed against grows the field first.
-				{
-					selector:
-						"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
-					message:
-						"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an operator wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
-				},
-				{
-					selector:
-						"Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
-					message:
-						"E01-S10: `shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and a resource resolver has no reason to read it either: checkShopOwnerApproval already ran at login and runs again on every refresh, so a session that reached this service is approved by construction. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER in marketplace-common."
-				}
-			]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX]
+		}
+	},
+	// The write ban rides on top of the shared entries rather than replacing them: a second config
+	// object naming the same rule discards the first one's options for every file it matches, so
+	// dropping the spread would silently un-ban `notes`, `waitApprov` and every Sentry selector inside
+	// src/** — the half of the repo they exist for.
+	{
+		files: ['src/**/*.mts'],
+		rules: {
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...DISABLED_NO_WRITE]
 		}
 	}
 ]
