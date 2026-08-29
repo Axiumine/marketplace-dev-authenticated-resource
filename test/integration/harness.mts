@@ -59,10 +59,19 @@ export async function drainDocuments(collection: string, ids: mongoose.Types.Obj
 }
 
 /**
- * The tail every suite ends with: the companies seeded, then the session keys, then the three
- * handles.
+ * The tail every suite ends with: the items seeded, then the companies, then the session keys, then
+ * the three handles.
+ *
+ * Items before companies, because that is the order the chain points in — nothing in MongoDB enforces
+ * `idCompany`, so a company dropped first would leave its items pointing at an id that no longer
+ * resolves, and the next run's failure would name the item rather than this drain. `items` is optional:
+ * two of the three suites here never write one.
  */
-export async function drainAndClose(httpServer: Server, seeded: { companies: mongoose.Types.ObjectId[]; keys: string[] }) {
+export async function drainAndClose(
+	httpServer: Server,
+	seeded: { companies: mongoose.Types.ObjectId[]; items?: mongoose.Types.ObjectId[]; keys: string[] }
+) {
+	await drainDocuments('item', seeded.items ?? [])
 	await drainDocuments('company', seeded.companies)
 	// One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
 	for (const key of seeded.keys) {

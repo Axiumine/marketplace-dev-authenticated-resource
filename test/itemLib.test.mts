@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const companyFind = vi.fn()
 const itemUpdateOne = vi.fn()
+const itemUpdateMany = vi.fn()
 const itemCountDocuments = vi.fn()
 const itemCategoryCountDocuments = vi.fn()
 const itemCategoryFindOneAndUpdate = vi.fn()
@@ -14,7 +15,7 @@ vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.f
 // against a real database three services away.
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({ Company: { find: companyFind } }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
-	Item: { updateOne: itemUpdateOne, countDocuments: itemCountDocuments }
+	Item: { updateOne: itemUpdateOne, updateMany: itemUpdateMany, countDocuments: itemCountDocuments }
 }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 	ItemCategory: { countDocuments: itemCategoryCountDocuments, findOneAndUpdate: itemCategoryFindOneAndUpdate }
@@ -27,18 +28,22 @@ const { shopOwnerCompanyIds } = await import('../src/lib/company/shopOwnerCompan
 const { funItemDelete } = await import('../src/lib/item/funItemDelete.mts')
 const { funItemUpdate } = await import('../src/lib/item/funItemUpdate.mts')
 const { funItemUpdatePublished } = await import('../src/lib/item/funItemUpdatePublished.mts')
+const { funItemsUpdatePublished } = await import('../src/lib/item/funItemsUpdatePublished.mts')
 const { holdItemCategory } = await import('../src/lib/item/holdItemCategory.mts')
 const { throwIfItemCategoryMissing } = await import('../src/lib/item/throwIfItemCategoryMissing.mts')
 const { throwIfShopOwnerDontOwnItem } = await import('../src/lib/item/throwIfShopOwnerDontOwnItem.mts')
+const { throwIfShopOwnerDontOwnAllItems } = await import('../src/lib/item/throwIfShopOwnerDontOwnAllItems.mts')
 const { storeItemImage } = await import('../src/lib/item/storeItemImage.mts')
 
 const shopOwnerId = new Types.ObjectId('507f1f77bcf86cd799439011')
 const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
 const idOtherCompany = new Types.ObjectId('507f1f77bcf86cd799439016')
 const itemId = new Types.ObjectId('507f1f77bcf86cd799439020')
+const otherItemId = new Types.ObjectId('507f1f77bcf86cd799439021')
 const idCategory = new Types.ObjectId('507f1f77bcf86cd799439030')
 
 const updateExec = vi.fn()
+const updateManyExec = vi.fn()
 
 /**
  * A session double, and the only thing asserted about it is which queries were handed it.
@@ -72,6 +77,9 @@ const holding = (doc: unknown) => sessioned({ lean: vi.fn().mockResolvedValue(do
  */
 const updating = () => ({ ...sessioned({ exec: updateExec }), exec: updateExec })
 
+/** updateMany() is chained one way only — the bulk publish never joins a session, so `.exec()` is the whole tail. */
+const updatingMany = () => ({ exec: updateManyExec })
+
 /**
  * All three writes go through the same `updateOne` filter — `_id` plus the owner's live companies, and
  * nothing else — so the assertion is shared rather than restated. Returns the update half, which is
@@ -81,6 +89,22 @@ function expectOwnerScopedWrite() {
 	const [filter, update] = itemUpdateOne.mock.calls[0]
 	expect(itemUpdateOne).toHaveBeenCalledOnce()
 	expect(filter._id).toBe(itemId)
+	expect(filter.idCompany).toEqual(trusted({ $in: [idCompany, idOtherCompany] }))
+	expect(Object.keys(filter).sort()).toEqual(['_id', 'idCompany'])
+
+	return update
+}
+
+/**
+ * The bulk write's filter — the id set the caller named, plus the owner's live companies, and nothing
+ * else. Same shape as the singular's, with the `_id` clause widened to a trusted `$in`, and asserted
+ * the same way: on the exact key set, because a dropped `idCompany` clause makes the write succeed
+ * against every shop on the platform instead of failing anything.
+ */
+function expectOwnerScopedBulkWrite(itemIds: Types.ObjectId[]) {
+	const [filter, update] = itemUpdateMany.mock.calls[0]
+	expect(itemUpdateMany).toHaveBeenCalledOnce()
+	expect(filter._id).toEqual(trusted({ $in: itemIds }))
 	expect(filter.idCompany).toEqual(trusted({ $in: [idCompany, idOtherCompany] }))
 	expect(Object.keys(filter).sort()).toEqual(['_id', 'idCompany'])
 
@@ -100,7 +124,9 @@ const data = {
 beforeEach(() => {
 	companyFind.mockReset().mockReturnValue(finding([{ _id: idCompany }, { _id: idOtherCompany }]))
 	itemUpdateOne.mockReset().mockReturnValue(updating())
+	itemUpdateMany.mockReset().mockReturnValue(updatingMany())
 	updateExec.mockReset().mockResolvedValue({ matchedCount: 1 })
+	updateManyExec.mockReset().mockResolvedValue({ matchedCount: 2 })
 	itemCountDocuments.mockReset().mockReturnValue(counting(1))
 	itemCategoryCountDocuments.mockReset().mockReturnValue(counting(1))
 	itemCategoryFindOneAndUpdate.mockReset().mockReturnValue(holding({ _id: idCategory }))
@@ -217,6 +243,60 @@ describe('throwIfShopOwnerDontOwnItem', () => {
 
 		await expect(throwIfShopOwnerDontOwnItem(shopOwnerId, itemId)).rejects.toThrow('Forbidden')
 		expect(itemCountDocuments.mock.calls[0][0].idCompany).toEqual(trusted({ $in: [] }))
+	})
+})
+
+describe('throwIfShopOwnerDontOwnAllItems', () => {
+	const itemIds = [itemId, otherItemId]
+
+	// The same two hops as the singular, over a set: `shopOwnerCompanyIds` first, then one count scoped
+	// to it. The exact key set is asserted for the same reason — a dropped clause does not fail anything,
+	// it just makes the guard start passing.
+	it('passes when every id in the list hangs off one of the owner’s live companies', async () => {
+		itemCountDocuments.mockReturnValueOnce(counting(2))
+
+		await expect(throwIfShopOwnerDontOwnAllItems(shopOwnerId, itemIds)).resolves.toBeUndefined()
+
+		const [filter] = itemCountDocuments.mock.calls[0]
+		expect(companyFind).toHaveBeenCalledOnce()
+		expect(itemCountDocuments).toHaveBeenCalledOnce()
+		expect(filter._id).toEqual(trusted({ $in: itemIds }))
+		expect(filter.deleted).toEqual(trusted({ $exists: false }))
+		expect(filter.idCompany).toEqual(trusted({ $in: [idCompany, idOtherCompany] }))
+		expect(Object.keys(filter).sort()).toEqual(['_id', 'deleted', 'idCompany'])
+	})
+
+	// ⚠️ The case the whole guard exists for, and the one a `found === 0` check would let through: a list
+	// that is mostly the owner's own with one stranger's id folded into it. All or nothing — anything
+	// else applies the write to part of the list and tells the caller, one call at a time, which ids are
+	// real.
+	it('answers 403 when one id in the list is not the owner’s', async () => {
+		itemCountDocuments.mockReturnValueOnce(counting(1))
+
+		await expect(throwIfShopOwnerDontOwnAllItems(shopOwnerId, itemIds)).rejects.toThrow('Forbidden')
+	})
+
+	it('answers 403 when none of them are', async () => {
+		itemCountDocuments.mockReturnValueOnce(counting(0))
+
+		await expect(throwIfShopOwnerDontOwnAllItems(shopOwnerId, itemIds)).rejects.toThrow('Forbidden')
+	})
+
+	it('answers 403 for an owner who holds no company at all', async () => {
+		companyFind.mockReturnValueOnce(finding([]))
+		itemCountDocuments.mockReturnValueOnce(counting(0))
+
+		await expect(throwIfShopOwnerDontOwnAllItems(shopOwnerId, itemIds)).rejects.toThrow('Forbidden')
+		expect(itemCountDocuments.mock.calls[0][0].idCompany).toEqual(trusted({ $in: [] }))
+	})
+
+	// ⚠️ On record rather than by accident: an empty list counts zero documents against zero entries and
+	// passes. Refusing it is `itemsUpdatePublished`'s job, where the answer can be the 400 an empty
+	// selection deserves — a 403 here would tell an owner they do not own items they never named.
+	it('has nothing to refuse about an empty list', async () => {
+		itemCountDocuments.mockReturnValueOnce(counting(0))
+
+		await expect(throwIfShopOwnerDontOwnAllItems(shopOwnerId, [])).resolves.toBeUndefined()
 	})
 })
 
@@ -396,6 +476,48 @@ describe('funItemUpdatePublished', () => {
 		updateExec.mockResolvedValueOnce({ matchedCount: 0 })
 
 		await expect(funItemUpdatePublished(itemId, shopOwnerId, true)).rejects.toThrow('Internal Server Error')
+	})
+})
+
+describe('funItemsUpdatePublished', () => {
+	const itemIds = [itemId, otherItemId]
+
+	// One `updateMany`, one `$set`, one field — the bulk shape of the singular, and the exact key set of
+	// `$set` is what keeps it that way. A widened update here would write every selected card at once.
+	it('writes the flag alone across the list, scoped to the companies its owner holds', async () => {
+		await expect(funItemsUpdatePublished(itemIds, shopOwnerId, true)).resolves.toBeUndefined()
+
+		expect(expectOwnerScopedBulkWrite(itemIds)).toEqual({ $set: { published: true } })
+	})
+
+	it('withdraws the whole list with the same call and the flag the other way round', async () => {
+		await expect(funItemsUpdatePublished(itemIds, shopOwnerId, false)).resolves.toBeUndefined()
+
+		expect(expectOwnerScopedBulkWrite(itemIds)).toEqual({ $set: { published: false } })
+	})
+
+	// `matchedCount`, not `modifiedCount`: a select-all over a shop where half the cards already carry
+	// the flag matches every one of them and modifies some, and that is the state the owner asked for.
+	it('accepts a bulk publish where nothing needed changing', async () => {
+		updateManyExec.mockResolvedValueOnce({ matchedCount: 2, modifiedCount: 0 })
+
+		await expect(funItemsUpdatePublished(itemIds, shopOwnerId, true)).resolves.toBeUndefined()
+	})
+
+	// ⚠️ Compared against the length of the list, not against zero. `throwIfShopOwnerDontOwnAllItems` has
+	// just proved all of them are the session's, so a write that reached fewer means the set moved
+	// underneath — and a partial application the owner was told nothing about is the one outcome this
+	// mutation must never have.
+	it('raises a 500 when the write reached fewer items than were named', async () => {
+		updateManyExec.mockResolvedValueOnce({ matchedCount: 1 })
+
+		await expect(funItemsUpdatePublished(itemIds, shopOwnerId, true)).rejects.toThrow('Internal Server Error')
+	})
+
+	it('raises a 500 when the write reached nothing at all', async () => {
+		updateManyExec.mockResolvedValueOnce({ matchedCount: 0 })
+
+		await expect(funItemsUpdatePublished(itemIds, shopOwnerId, true)).rejects.toThrow('Internal Server Error')
 	})
 })
 

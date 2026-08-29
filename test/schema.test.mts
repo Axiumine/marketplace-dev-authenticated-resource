@@ -57,6 +57,13 @@ function typeOfField(typeName: string, fieldName: string): string {
 	return String(type.getFields()[fieldName].type)
 }
 
+/** The rendered type of one argument — the only place a list's own nullability is readable. */
+function typeOfArg(root: 'QueriesApi' | 'MutationsApi', fieldName: string, argName: string): string {
+	const type = schema.getType(root) as { getFields(): Record<string, { args: Array<{ name: string; type: unknown }> }> }
+
+	return String(type.getFields()[fieldName].args.find((a) => a.name === argName)?.type)
+}
+
 describe('schema', () => {
 	it('assembles without a single validation error', () => {
 		expect(result.errors).toBeUndefined()
@@ -70,11 +77,13 @@ describe('schema', () => {
 		expect(fieldsOf('QueriesApi')).toEqual(['companyItems', 'itemCategories', 'shopOwnerCompanies'])
 	})
 
-	// The shop add/delete/disable mutations went the same way. The four
+	// The shop add/delete/disable mutations went the same way. The five
 	// `item*` are the owner's whole write surface on the catalogue — there is deliberately no
 	// `itemCategory*` here, because the taxonomy is written on the Admin tier alone.
-	// The two `*UpdatePublished` are the publish split: saving a card and putting it on the public site
+	// The three `*UpdatePublished` are the publish split: saving a card and putting it on the public site
 	// are two operations, so an owner reopening a stale form cannot republish what someone took down.
+	// `itemsUpdatePublished` is the bulk half of the item one, for the select-all control on a list that
+	// is not paged — a separate field, so the singular's one-id contract stays exactly as narrow as it is.
 	it('exposes the company and item mutations', () => {
 		expect(fieldsOf('MutationsApi')).toEqual([
 			'companyAdd',
@@ -84,7 +93,8 @@ describe('schema', () => {
 			'itemAdd',
 			'itemDel',
 			'itemUpdate',
-			'itemUpdatePublished'
+			'itemUpdatePublished',
+			'itemsUpdatePublished'
 		])
 	})
 
@@ -120,9 +130,9 @@ describe('schema', () => {
 })
 
 describe('mutation arguments', () => {
-	// No `idShopOwner` on any of the eight: the owner is the session's. `companyAdd` takes the input
+	// No `idShopOwner` on any of the nine: the owner is the session's. `companyAdd` takes the input
 	// object alone and `companyUpdate` takes it beside the `_id`, so a company cannot be handed to
-	// another owner by saving its card. The item four carry no `idShopOwner` either — an item's owner is
+	// another owner by saving its card. The item five carry no `idShopOwner` either — an item's owner is
 	// reached through its company, which is what the guards traverse.
 	// The two publish mutations take the flag beside the `_id` and nothing else: they are not a save
 	// with one field, so no input object appears here.
@@ -134,7 +144,8 @@ describe('mutation arguments', () => {
 		['itemAdd', ['item']],
 		['itemDel', ['_id']],
 		['itemUpdate', ['_id', 'item']],
-		['itemUpdatePublished', ['_id', 'published']]
+		['itemUpdatePublished', ['_id', 'published']],
+		['itemsUpdatePublished', ['_ids', 'published']]
 	])('%s takes %j', (name, expected) => {
 		expect(argsOf('MutationsApi', name)).toEqual(expected)
 	})
@@ -148,9 +159,20 @@ describe('mutation arguments', () => {
 		['itemAdd', 'add item'],
 		['itemDel', 'del item'],
 		['itemUpdate', 'update item'],
-		['itemUpdatePublished', 'publishes or unpublishes an item']
+		['itemUpdatePublished', 'publishes or unpublishes an item'],
+		['itemsUpdatePublished', 'publishes or unpublishes several items at once']
 	])('%s carries its exact description', (name, description) => {
 		expect(descriptionOf('MutationsApi', name)).toBe(description)
+	})
+
+	/*
+	 * ⚠️ `[ID!]!` and not `[ID]` — the inner `!` is what stops a `null` reaching the resolver inside the
+	 * list, where it would be de-duplicated to a single entry and counted against an ownership check it
+	 * can never satisfy. Rendered through the schema rather than introspection, which reports argument
+	 * names alone.
+	 */
+	it('takes a non-null list of non-null ids on the bulk publish mutation', () => {
+		expect(typeOfArg('MutationsApi', 'itemsUpdatePublished', '_ids')).toBe('[ID!]!')
 	})
 })
 

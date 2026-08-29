@@ -78,6 +78,7 @@ async function withSession(_id = new mongoose.Types.ObjectId(), email = 'oste@ma
  ****************************************************************************************/
 
 const seededCompanies: mongoose.Types.ObjectId[] = []
+const seededItems: mongoose.Types.ObjectId[] = []
 const seededKeys: string[] = []
 
 /**
@@ -141,12 +142,41 @@ async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 	return { _id, legalName }
 }
 
+/**
+ * One item, hanging off a company.
+ *
+ * The raw driver again, so the seed is checked by `item`'s own `$jsonSchema` — `additionalProperties:
+ * false`, `name` at most 150, `slug` matching the URL grammar and unique per company. Nothing on this
+ * collection is encrypted: an item is a catalogue entry, not a person.
+ *
+ * `idCategory` is a fresh id pointing at nothing. The reference is required and unenforced, and the
+ * mutation under test never reads it — the guards this file exercises traverse `idCompany`.
+ */
+async function seedItem(idCompany: mongoose.Types.ObjectId, published = false) {
+	const _id = new mongoose.Types.ObjectId()
+
+	await db()
+		.collection('item')
+		.insertOne({
+			_id,
+			idCompany,
+			idCategory: new mongoose.Types.ObjectId(),
+			name: 'Itest Item',
+			description: 'Seeded by the integration suite',
+			slug: `itest-${_id.toHexString()}`,
+			published
+		})
+	seededItems.push(_id)
+
+	return _id
+}
+
 beforeAll(async () => {
 	;({ httpServer, base } = await bootServer())
 })
 
 // Drop whatever this run created while the handles are still open: documents, then every session key.
-afterAll(() => drainAndClose(httpServer, { companies: seededCompanies, keys: seededKeys }))
+afterAll(() => drainAndClose(httpServer, { companies: seededCompanies, items: seededItems, keys: seededKeys }))
 
 describe('authenticated-resource service (integration, real MongoDB + real Redis cluster)', () => {
 	// start() is what wires both datasources and arms ClamAV; asserting the live handles is what
@@ -445,6 +475,107 @@ describe('companyUpdatePublished (the publish rule against the real collection)'
 				legalName: company.legalName,
 				registryExtract: 'itest-registryExtract'
 			})
+		} finally {
+			await session.cleanup()
+		}
+	})
+})
+
+describe('itemsUpdatePublished (the bulk publish against the real collections)', () => {
+	const bulkPublish = (ids: mongoose.Types.ObjectId[], published: boolean, headers: Record<string, string>) =>
+		gql(
+			`mutation { itemsUpdatePublished(_ids: [${ids.map((_id) => `"${_id.toHexString()}"`).join(', ')}], published: ${published}) }`,
+			headers
+		)
+
+	const publishedFlags = async (ids: mongoose.Types.ObjectId[]) =>
+		await Promise.all(ids.map(async (_id) => (await db().collection('item').findOne({ _id }))?.published))
+
+	/*
+	 * ⚠️ The one thing no unit test can prove: that the `$in` clauses actually match. `sanitizeFilter` is
+	 * on process-wide, and an unwrapped `$`-keyed value is rewritten to `{ $eq: … }` — which matches
+	 * nothing, for ever, while every call reports success. Against a real collection the same mistake is a
+	 * `matchedCount` of zero and a 500, which is what makes this test the proof and the mocked ones the
+	 * explanation.
+	 */
+	it('publishes a whole list in one call, and withdraws it again', async () => {
+		const session = await withSession()
+		const company = await seedCompany(session._id)
+		const items = [await seedItem(company._id), await seedItem(company._id), await seedItem(company._id)]
+
+		try {
+			const published = await bulkPublish(items, true, session.headers)
+			expect(published.json.errors).toBeUndefined()
+			expect(published.json.data).toEqual({ itemsUpdatePublished: true })
+			expect(await publishedFlags(items)).toEqual([true, true, true])
+
+			const withdrawn = await bulkPublish(items, false, session.headers)
+			expect(withdrawn.json.errors).toBeUndefined()
+			expect(await publishedFlags(items)).toEqual([false, false, false])
+		} finally {
+			await session.cleanup()
+		}
+	})
+
+	/*
+	 * ⚠️ All or nothing, against real data: two of the owner's own items and one stranger's, and the two
+	 * that were legitimate must come back untouched. A guard that counted `found > 0` — or a write that
+	 * simply applied to whatever matched — passes every mocked test and fails here, with the owner's own
+	 * two cards published by a call that was refused.
+	 */
+	it('refuses the whole list for one foreign id, and leaves every flag where it was', async () => {
+		const session = await withSession()
+		const stranger = await withSession()
+		const company = await seedCompany(session._id)
+		const foreignCompany = await seedCompany(stranger._id)
+		const mine = [await seedItem(company._id), await seedItem(company._id)]
+		const theirs = await seedItem(foreignCompany._id)
+
+		try {
+			const { json } = await bulkPublish([...mine, theirs], true, session.headers)
+
+			expect(json.errors?.[0].message).toBe('Forbidden')
+			expect(await publishedFlags([...mine, theirs])).toEqual([false, false, false])
+		} finally {
+			await session.cleanup()
+			await stranger.cleanup()
+		}
+	})
+
+	/*
+	 * The `deleted` clause of the guard, which is the difference between "not yours" and "gone": a
+	 * withdrawn item is absent from `companyItems`, so the only way to name one is an id a client kept
+	 * from before, and the answer has to be the same 403 a stranger's id gets.
+	 */
+	it('refuses a list carrying an item the owner has already withdrawn', async () => {
+		const session = await withSession()
+		const company = await seedCompany(session._id)
+		const live = await seedItem(company._id)
+		const retired = await seedItem(company._id)
+
+		try {
+			await db()
+				.collection('item')
+				.updateOne({ _id: retired }, { $set: { deleted: new Date() } })
+
+			const { json } = await bulkPublish([live, retired], true, session.headers)
+
+			expect(json.errors?.[0].message).toBe('Forbidden')
+			expect(await publishedFlags([live])).toEqual([false])
+		} finally {
+			await session.cleanup()
+		}
+	})
+
+	// The 400 half, end to end: GraphQL accepts `[]` against `[ID!]!`, so the refusal is the resolver's
+	// and it has to reach the client as a request error rather than a quiet success.
+	it('refuses an empty selection', async () => {
+		const session = await withSession()
+
+		try {
+			const { json } = await bulkPublish([], true, session.headers)
+
+			expect(json.errors?.[0].message).toBe('Bad Request')
 		} finally {
 			await session.cleanup()
 		}
