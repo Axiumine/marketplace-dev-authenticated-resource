@@ -6,8 +6,10 @@ import { companyUpdate } from './mutations/companyUpdate.mjs'
 import { companyUpdatePublished } from './mutations/companyUpdatePublished.mjs'
 import { itemAdd } from './mutations/itemAdd.mjs'
 import { itemDel } from './mutations/itemDel.mjs'
+import { itemsUpdatePublished } from './mutations/itemsUpdatePublished.mjs'
 import { itemUpdate } from './mutations/itemUpdate.mjs'
 import { itemUpdatePublished } from './mutations/itemUpdatePublished.mjs'
+import { shopOwnerDel } from './mutations/shopOwnerDel.mjs'
 
 const MutationsApi = new GraphQLObjectType({
 	name: 'MutationsApi',
@@ -19,7 +21,9 @@ const MutationsApi = new GraphQLObjectType({
 		itemAdd,
 		itemDel,
 		itemUpdate,
-		itemUpdatePublished
+		itemUpdatePublished,
+		itemsUpdatePublished,
+		shopOwnerDel
 	}
 })
 

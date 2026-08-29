@@ -59,11 +59,26 @@ export async function drainDocuments(collection: string, ids: mongoose.Types.Obj
 }
 
 /**
- * The tail every suite ends with: the companies seeded, then the session keys, then the three
- * handles.
+ * The tail every suite ends with: the items seeded, then the companies, then the shop owners, then the
+ * session keys, then the three handles.
+ *
+ * Down the chain, because that is the order it points in — nothing in MongoDB enforces `idCompany` or
+ * `idShopOwner`, so a company dropped first would leave its items pointing at an id that no longer
+ * resolves, and the next run's failure would name the item rather than this drain. `items` and
+ * `shopOwners` are optional: not every suite here writes one.
  */
-export async function drainAndClose(httpServer: Server, seeded: { companies: mongoose.Types.ObjectId[]; keys: string[] }) {
+export async function drainAndClose(
+	httpServer: Server,
+	seeded: {
+		companies: mongoose.Types.ObjectId[]
+		items?: mongoose.Types.ObjectId[]
+		shopOwners?: mongoose.Types.ObjectId[]
+		keys: string[]
+	}
+) {
+	await drainDocuments('item', seeded.items ?? [])
 	await drainDocuments('company', seeded.companies)
+	await drainDocuments('shopOwner', seeded.shopOwners ?? [])
 	// One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
 	for (const key of seeded.keys) {
 		await drainSafely(key, () => redisClient.del(key))

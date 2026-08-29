@@ -9,9 +9,11 @@ const captureException = vi.fn()
 const itemCreate = vi.fn()
 const throwIfShopOwnerDontOwnCompany = vi.fn()
 const throwIfShopOwnerDontOwnItem = vi.fn()
+const throwIfShopOwnerDontOwnAllItems = vi.fn()
 const throwIfItemCategoryMissing = vi.fn()
 const funItemUpdate = vi.fn()
 const funItemUpdatePublished = vi.fn()
+const funItemsUpdatePublished = vi.fn()
 const funItemDelete = vi.fn()
 const storeItemImage = vi.fn()
 const moveFileStaticDomain = vi.fn()
@@ -46,6 +48,7 @@ vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn() }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({ Item: { create: itemCreate } }))
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))
 vi.mock('@lib/item/throwIfShopOwnerDontOwnItem.mjs', () => ({ throwIfShopOwnerDontOwnItem }))
+vi.mock('@lib/item/throwIfShopOwnerDontOwnAllItems.mjs', () => ({ throwIfShopOwnerDontOwnAllItems }))
 vi.mock('@lib/item/throwIfItemCategoryMissing.mjs', () => ({ throwIfItemCategoryMissing }))
 vi.mock('@lib/item/holdItemCategory.mjs', () => ({ holdItemCategory }))
 // Only `startSession` is replaced. `Types.ObjectId` is used by the resolvers under test and by this file
@@ -57,6 +60,7 @@ vi.mock('mongoose', async (importOriginal) => {
 })
 vi.mock('@lib/item/funItemUpdate.mjs', () => ({ funItemUpdate }))
 vi.mock('@lib/item/funItemUpdatePublished.mjs', () => ({ funItemUpdatePublished }))
+vi.mock('@lib/item/funItemsUpdatePublished.mjs', () => ({ funItemsUpdatePublished }))
 vi.mock('@lib/item/funItemDelete.mjs', () => ({ funItemDelete }))
 // The upload half is stubbed at its own two seams rather than exercised: `storeItemImage` reaches
 // ClamAV and sharp, and `moveFileStaticDomain` writes into STATIC_FOLDER. What this file is testing is
@@ -67,12 +71,14 @@ vi.mock('@axiumine/koa-utils/files/moveFileStaticDomain', () => ({ moveFileStati
 const { itemAdd } = await import('../src/graphQLApi/schema/mutations/itemAdd.mts')
 const { itemUpdate } = await import('../src/graphQLApi/schema/mutations/itemUpdate.mts')
 const { itemUpdatePublished } = await import('../src/graphQLApi/schema/mutations/itemUpdatePublished.mts')
+const { MAX_ITEMS_PER_CALL, itemsUpdatePublished } = await import('../src/graphQLApi/schema/mutations/itemsUpdatePublished.mts')
 const { itemDel } = await import('../src/graphQLApi/schema/mutations/itemDel.mts')
 
 const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
 const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
 const idCategory = new Types.ObjectId('507f1f77bcf86cd799439030')
 const itemId = new Types.ObjectId('507f1f77bcf86cd799439020')
+const otherItemId = new Types.ObjectId('507f1f77bcf86cd799439021')
 
 const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwnerAuthenticatedResource
 
@@ -122,9 +128,11 @@ beforeEach(() => {
 	holdItemCategory.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
+	throwIfShopOwnerDontOwnAllItems.mockResolvedValue(undefined)
 	throwIfItemCategoryMissing.mockResolvedValue(undefined)
 	funItemUpdate.mockResolvedValue(undefined)
 	funItemUpdatePublished.mockResolvedValue(undefined)
+	funItemsUpdatePublished.mockResolvedValue(undefined)
 	funItemDelete.mockResolvedValue(undefined)
 	storeItemImage.mockResolvedValue(stored)
 	moveFileStaticDomain.mockResolvedValue(undefined)
@@ -478,6 +486,115 @@ describe('itemUpdatePublished', () => {
 		funItemUpdatePublished.mockRejectedValueOnce(driverError)
 
 		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toThrow('Internal Server Error')
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+})
+
+describe('itemsUpdatePublished', () => {
+	const itemIds = [itemId, otherItemId]
+
+	/** A list of distinct ids of whatever length a case needs — the bound is the only thing being sized. */
+	const manyIds = (howMany: number) => Array.from({ length: howMany }, () => new Types.ObjectId())
+
+	// One guard for the whole list and one write for the whole list, in that order. The company and
+	// category guards stay out of it for the same reason they stay out of the singular: nothing moves.
+	it('checks the whole list once, then delegates the flag for all of it', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).resolves.toBe(true)
+
+		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(userId, itemIds)
+		expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
+		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, true)
+	})
+
+	// The direction the select-all control exists for: an owner taking a whole shop off the public site
+	// in one call, rather than one card at a time with a half-published shop visible in between.
+	it('passes false through unchanged when the owner withdraws the whole list', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: false })).resolves.toBe(true)
+
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, false)
+	})
+
+	// ⚠️ A repeated id has to be collapsed before the guard sees it, not after: the guard counts documents
+	// against the length of the list, so `[a, a]` would count one against two and refuse a call made
+	// entirely of the owner's own items. Both callees get the collapsed list, and it keeps its order.
+	it('collapses a repeated id before checking ownership and before writing', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: [itemId, otherItemId, itemId], published: true })).resolves.toBe(true)
+
+		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(userId, itemIds)
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, true)
+	})
+
+	// ⚠️ 400 and not a quiet `true`. An empty selection is a client that lost track of what was ticked,
+	// and answering success would show the owner a shop they believe they just published. Nothing is read
+	// and nothing is written — a refusal must not cost a round trip to Mongo either.
+	it('refuses an empty list without checking or writing anything', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: [], published: true })).rejects.toMatchObject({
+			message: 'Bad Request',
+			extensions: { http: { status: 400 }, description: '_ids: at least one item is required' }
+		})
+		expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
+		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+	})
+
+	// ⚠️ The bound is the only thing standing between `[ID!]!` and a query the caller sizes: both the
+	// guard's count and the write scan a `$in` the request chose. Asserted as a literal because the
+	// number is a promise the frontend keeps too — it sends a bigger selection in runs of this size.
+	it('is bounded at five hundred items per call', () => {
+		expect(MAX_ITEMS_PER_CALL).toBe(500)
+	})
+
+	it('accepts a list exactly as long as the bound allows', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL), published: true })).resolves.toBe(true)
+
+		expect(funItemsUpdatePublished).toHaveBeenCalledOnce()
+	})
+
+	it('refuses one item more than that, without checking or writing anything', async () => {
+		await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL + 1), published: true })).rejects.toMatchObject({
+			message: 'Bad Request',
+			extensions: { http: { status: 400 }, description: `_ids: at most ${MAX_ITEMS_PER_CALL} items per call` }
+		})
+		expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
+		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+	})
+
+	// ⚠️ The order of the two steps, and it is the de-duplication that comes first: a client that ticked
+	// every box twice sends twice the bound and is asking for a list the server is perfectly willing to
+	// serve. Measuring the raw list instead would refuse it.
+	it('measures the bound after collapsing repeats, not before', async () => {
+		const ids = manyIds(MAX_ITEMS_PER_CALL)
+
+		await expect(run(itemsUpdatePublished, { _ids: [...ids, ids[0]], published: true })).resolves.toBe(true)
+
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(ids, userId, true)
+	})
+
+	// All or nothing: one stranger's id in the list refuses every item in it, including the ones the
+	// caller does own. `throwIfShopOwnerDontOwnAllItems` is where that decision lives; this is the half of
+	// it that matters here — nothing is written.
+	it('does not write anything when one item in the list is not the caller’s', async () => {
+		throwIfShopOwnerDontOwnAllItems.mockRejectedValueOnce(forbidden())
+
+		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
+		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+	})
+
+	it('keeps a downstream GraphQL error instead of flattening it', async () => {
+		funItemsUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+
+		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({
+			message: 'Conflict',
+			extensions: { http: { status: 409 } }
+		})
+		expect(captureException).not.toHaveBeenCalled()
+	})
+
+	it('turns a driver failure into a 500', async () => {
+		funItemsUpdatePublished.mockRejectedValueOnce(driverError)
+
+		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
 	})
 })

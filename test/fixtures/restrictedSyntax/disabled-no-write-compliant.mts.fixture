@@ -1,0 +1,24 @@
+// Every read shape the gates depend on, and the one thing this rule must never refuse: the enforcement
+// itself. `checkUserAuthorizationDisDel` runs at login and `findAccountForSession` on every refresh, so a
+// rule that fired on a read would be a rule that fired on the reason `disabled` works at all.
+
+// The projection every service on the platform carries — a space-separated string, not an object.
+export const loginProjection = '_id disabled deleted login.password login.firstLogin'
+
+// The comparison the gate makes, and the destructure a caller writes over the document it just read.
+export const isSuspended = (owner: Record<string, unknown>) => owner.disabled === true
+
+export const suspensionOf = (owner: { disabled?: boolean; disabledReason?: string }) => {
+	const { disabled, disabledReason } = owner
+
+	return disabled === true ? disabledReason : undefined
+}
+
+// The interface the projection is typed against, where a widened read lands first.
+export interface IShopOwnerDisabledCheck {
+	disabled?: boolean
+	disabledReason?: string
+}
+
+// Both names in prose, the way ADR-044 and this repo's own comments write them: disabled, disabledBy.
+export const boundary = 'the Admin tier owns disabled and disabledReason; this tier stamps deleted alone'
