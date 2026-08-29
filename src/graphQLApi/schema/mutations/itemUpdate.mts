@@ -25,7 +25,7 @@ interface IArgs {
  *
  * The third is `holdItemCategory`, and it is inside the transaction rather than beside the other two: a
  * save can also re-file an item under a different category, so it has to refuse one that does not exist
- * — and it has to keep on refusing until the save lands, or an operator retiring that category in the
+ * — and it has to keep on refusing until the save lands, or an admin retiring that category in the
  * same instant leaves the item filed under it. Unlike `itemAdd` this mutation uploads nothing, so there
  * is no expensive step to refuse ahead of and no reason to ask the question a second, cheaper time.
  *

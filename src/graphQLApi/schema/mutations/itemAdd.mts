@@ -39,12 +39,12 @@ interface IArgs {
  * ⚠️ **The category is checked twice, and the second one is the check that holds.** The guard above is a
  * count, and it is here to refuse early — ahead of an upload that writes a file, scans it with ClamAV and
  * re-encodes it. `holdItemCategory` asks the same question inside the transaction that carries the
- * insert, and it asks it with a write, so an operator retiring that category at the same instant collides
+ * insert, and it asks it with a write, so an admin retiring that category at the same instant collides
  * with this insert instead of committing past it. Without it `funItemCategoryDelete` on 4024 can count
  * zero live items, stamp `deleted`, and leave the item created in that instant filed under a category no
  * read path returns. See `holdItemCategory` for why a transaction on its own would not have closed it.
  *
- * Answers the new `_id`, like `companyAdd` and unlike the operator tier's `Boolean` — the owner's
+ * Answers the new `_id`, like `companyAdd` and unlike the admin tier's `Boolean` — the owner's
  * flow continues with the item that was just created, and the id is what the next step needs.
  *
  * ## The picture
@@ -74,7 +74,7 @@ interface IArgs {
  * successful insert leaves an item naming a file that is not there: the client is answered with a 500,
  * Sentry has the cause, and the item exists all the same — so a retry collides with its own slug and
  * comes back 409. Nothing compensates for it, deliberately: a rollback would be a second write that can
- * fail in turn, and the state it would clean up is one an operator can see and fix. It is written down
+ * fail in turn, and the state it would clean up is one an admin can see and fix. It is written down
  * here rather than left to be discovered.
  *
  * All three steps are inside the one try. Each is awaited, and each has to be: an unawaited promise

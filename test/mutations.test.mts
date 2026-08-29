@@ -144,7 +144,7 @@ describe('companyUpdatePublished', () => {
 	const args = { _id: idCompany, published: true }
 
 	// The same ownership guard `companyUpdate` runs, and then one flag: no input object, nothing else
-	// written. That separation is the point — an owner saving the card of a shop an operator has just
+	// written. That separation is the point — an owner saving the card of a shop an admin has just
 	// taken down no longer puts it back.
 	it('checks ownership then delegates the flag and answers true', async () => {
 		await expect(run(companyUpdatePublished, args)).resolves.toBe(true)
@@ -275,7 +275,7 @@ describe('shopOwnerDel', () => {
 	 * true is the tempting reading — and it would leave a closed account with every session still live,
 	 * which is the outcome the revoke exists to prevent. The owner sees a failure and calls again; the
 	 * second call finds the account closed and refuses, and the sessions are ended by the sweep or by the
-	 * operator. Reporting success would leave nobody looking.
+	 * admin. Reporting success would leave nobody looking.
 	 */
 	it('fails loudly when the sessions could not be ended', async () => {
 		endEverySession.mockRejectedValueOnce(driverError)

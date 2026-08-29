@@ -19,7 +19,7 @@ interface IArgs {
  * the shop, which made the second shop of the same chain collide on the unique VAT number. It is
  * created once here and then referenced by id.
  *
- * The new `_id` is the return value — unlike the operator tier's `Boolean`, because the owner's own flow
+ * The new `_id` is the return value — unlike the admin tier's `Boolean`, because the owner's own flow
  * is "create the company, then create the shop under it" and the second step needs the id the first one
  * produced.
  */

@@ -59,14 +59,14 @@ describe('the no-restricted-syntax block fires on every shape it names', () => {
 		['literal-node-tls-reject-unauthorized', TLS_MESSAGE],
 		['max-incoming-request-body-size', BODY_MESSAGE],
 		['before-send-without-transaction', HOOKS_MESSAGE],
-		['operator-only-notes-projection', NOTES_MESSAGE],
-		['operator-only-notes-property', NOTES_MESSAGE],
-		['operator-only-notes-member', NOTES_MESSAGE],
-		['operator-only-notes-signature', NOTES_MESSAGE],
-		['operator-only-wait-approv-projection', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-property', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-member', WAIT_APPROV_MESSAGE],
-		['operator-only-wait-approv-signature', WAIT_APPROV_MESSAGE]
+		['admin-only-notes-projection', NOTES_MESSAGE],
+		['admin-only-notes-property', NOTES_MESSAGE],
+		['admin-only-notes-member', NOTES_MESSAGE],
+		['admin-only-notes-signature', NOTES_MESSAGE],
+		['admin-only-wait-approv-projection', WAIT_APPROV_MESSAGE],
+		['admin-only-wait-approv-property', WAIT_APPROV_MESSAGE],
+		['admin-only-wait-approv-member', WAIT_APPROV_MESSAGE],
+		['admin-only-wait-approv-signature', WAIT_APPROV_MESSAGE]
 	])('reports %s exactly once', async (fixture, expected) => {
 		const messages = await lintFixture(fixture)
 
@@ -86,14 +86,14 @@ describe('the block stays silent on the shape the services carry', () => {
 	// field. `waitApprov` written with a colon after it — the way every comment in these repos writes
 	// it — is outside the word boundary the selector matches on, by construction rather than by luck.
 	it('reports nothing on the real ShopOwner projections, or on prose naming either field', async () => {
-		expect(await lintFixture('operator-only-compliant')).toStrictEqual([])
+		expect(await lintFixture('admin-only-compliant')).toStrictEqual([])
 	})
 })
 
 /*
  * ADR-044, and a scoping rule rather than a ban.
  *
- * Suspension is the operator's instrument at both ends: the Admin tier raises it and the Admin tier is
+ * Suspension is the admin's instrument at both ends: the Admin tier raises it and the Admin tier is
  * the only hand that lifts it. A ShopOwner-tier service able to write any `disabled*` field could clear
  * a sanction standing against the account making the request — the same argument the approval gate
  * makes one field over, and it earns the same lock.
@@ -139,8 +139,8 @@ describe('the disabled* write ban is scoped to src/**', () => {
 	// a src path, and the structural comparison below, which needs no fixture per entry and so cannot go
 	// stale as entries are added.
 	it.each([
-		['operator-only-wait-approv-property', WAIT_APPROV_MESSAGE],
-		['operator-only-notes-projection', NOTES_MESSAGE],
+		['admin-only-wait-approv-property', WAIT_APPROV_MESSAGE],
+		['admin-only-notes-projection', NOTES_MESSAGE],
 		['assignment-reject-unauthorized', TLS_MESSAGE]
 	])('still reports %s under src/, so the shared entries survived the second config object', async (fixture, expected) => {
 		const messages = await lintFixture(fixture, SRC_PATH)

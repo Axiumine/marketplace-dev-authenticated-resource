@@ -386,7 +386,7 @@ describe('funItemUpdate', () => {
 	// the session in between. The destination in `data` is the resolver's to check: a filter cannot
 	// check a value it is about to write.
 	// The `$set` is asserted whole, which is also what pins `published` out of it: a save writes the
-	// card and leaves the publish flag exactly where the owner or an operator last put it.
+	// card and leaves the publish flag exactly where the owner or an admin last put it.
 	it('saves the whole item, scoped to the companies its owner holds', async () => {
 		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toBeUndefined()
 
@@ -469,7 +469,7 @@ describe('funItemUpdatePublished', () => {
 		await expect(funItemUpdatePublished(itemId, shopOwnerId, true)).resolves.toBeUndefined()
 	})
 
-	// Unlike the operator tier's 404, this is a 500: `throwIfShopOwnerDontOwnItem` has already answered
+	// Unlike the admin tier's 404, this is a 500: `throwIfShopOwnerDontOwnItem` has already answered
 	// 403 for anything the session does not hold, so a filter that matches nothing here means the item
 	// moved between the guard and the write — not a client error.
 	it('raises a 500 when the filter matched nothing', async () => {

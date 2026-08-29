@@ -15,7 +15,7 @@ import { ClientSession, trusted, Types } from 'mongoose'
  * `published` is in that list too, and for a related reason: publishing is `itemUpdatePublished`, so a
  * `$set` of the whole object here must not carry the flag at all. Leaving it in would make every save
  * of the card a write of the flag, which is the behaviour that let a stale form republish an item an
- * operator had taken down.
+ * admin had taken down.
  *
  * `image` is in that list for a third reason, and it is the one that needs a runtime guard as well:
  * `GraphQLInputItem` carries an `Upload` under that key so `itemAdd` can take a picture, and the same
@@ -54,7 +54,7 @@ export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'publish
  *
  * ⚠️ **The session is not optional, and the write is only half of what it carries.** The resolver opens
  * one transaction over `holdItemCategory` and this save, so that a save which files an item under a
- * category collides with an operator retiring that same category instead of committing past it. Both
+ * category collides with an admin retiring that same category instead of committing past it. Both
  * queries here join it — the company read as much as the update, or the filter would be built from a
  * different snapshot than the write it scopes.
  */

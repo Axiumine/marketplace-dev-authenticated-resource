@@ -57,7 +57,7 @@ export const REQUIRED_ENV_VARS = [
 	// `SAMESITE_COOKIE` is the one that looks load-bearing and is not — the cookie policy it appears to
 	// name is the literal `sameSite: 'Strict'` in `@axiumine/koa-utils/dist/lib/tokenOptions.mjs`, which
 	// reads no variable, and the edge's `Secure` rewrite (ADR-034) is nginx config. A variable required at
-	// boot and read by nothing teaches operators that this list is noise, which is the one thing it cannot
+	// boot and read by nothing teaches admins that this list is noise, which is the one thing it cannot
 	// afford to be.
 	'INTROSPECTION_CODE',
 	// Read by `moveFileStaticDomain` (koa-utils, `files/`), which `itemAdd` calls once a picture has

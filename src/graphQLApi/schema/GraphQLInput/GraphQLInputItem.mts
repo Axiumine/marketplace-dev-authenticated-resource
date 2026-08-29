@@ -10,7 +10,7 @@ import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs'
  * something the session determines. It is checked against the session on every write —
  * `throwIfShopOwnerDontOwnCompany` — because an id the client sends is an id the client can guess.
  *
- * `idCategory` names a document of the platform-wide taxonomy, which only an operator may write. The
+ * `idCategory` names a document of the platform-wide taxonomy, which only an admin may write. The
  * owner picks from it and cannot extend it, which is the point: two shops selling the same kind of
  * thing have to land in the same category or the customer-facing filter means nothing.
  *
@@ -32,7 +32,7 @@ import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs'
  * ⚠️ **`published` is deliberately absent.** Publishing is its own operation on both tiers —
  * `itemUpdatePublished` here and on 4024 — and not a side effect of saving the card. It used to be a
  * `Boolean!` in this input, which meant every save wrote the flag: an owner who reopened a stale form
- * republished an item an operator had just taken down, without ever asking to. `itemAdd` stamps
+ * republished an item an admin had just taken down, without ever asking to. `itemAdd` stamps
  * `false`, and the item stays a draft until someone publishes it on purpose.
  */
 export const GraphQLInputItem = new GraphQLInputObjectType({

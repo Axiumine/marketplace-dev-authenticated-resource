@@ -16,7 +16,7 @@ import { trusted } from 'mongoose'
  * here that belongs to anybody. Flat rather than nested — `idParent` carries the shape and the client
  * assembles it, which keeps the type free of a recursive field the depth cap already bounds at two.
  *
- * Sorted by `position`, the ordinal the operator sets; `_id` breaks ties so the order is stable
+ * Sorted by `position`, the ordinal the admin sets; `_id` breaks ties so the order is stable
  * between calls rather than left to whatever the storage engine returns.
  */
 export const itemCategories = {

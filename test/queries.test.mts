@@ -94,7 +94,7 @@ describe('companyItems', () => {
 
 describe('itemCategories', () => {
 	// No session filter and no argument, on purpose: the taxonomy is platform-wide, written only by the
-	// operator tier, and there is nothing in it that belongs to anybody. The sort is part of the
+	// admin tier, and there is nothing in it that belongs to anybody. The sort is part of the
 	// contract rather than a nicety — `_id` breaks ties on equal `position`, so the order is stable
 	// between calls instead of whatever the storage engine hands back.
 	it('lists the whole live tree, flat, ordered by position then _id', async () => {

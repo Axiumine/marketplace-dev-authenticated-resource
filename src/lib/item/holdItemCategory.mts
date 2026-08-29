@@ -4,7 +4,7 @@ import { ClientSession, trusted, Types } from 'mongoose'
 
 /**
  * ⚠️ **Holds one category still for as long as the item write that names it takes.** This is the item
- * half of the rule the operator tier enforces from the other side: `funItemCategoryDelete` on 4024
+ * half of the rule the admin tier enforces from the other side: `funItemCategoryDelete` on 4024
  * refuses to retire a category while a live item still points at it, and without this the two are a
  * race — that delete counts the items, finds none, and stamps `deleted` while this service is creating
  * the item that would have stopped it. The result is a live item filed under a retired category:

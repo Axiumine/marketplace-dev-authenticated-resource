@@ -210,7 +210,7 @@ category collections are gone now too (see above), so every entry below is histo
 it explains a decision, a pattern, or a defect, not because the code it names is still on disk.
 
 - **`sanitizeFilter` vs `$exists` — the real one.** `MongoDBConnect` (koa-utils) sets
-  `mongoose.set('sanitizeFilter', true)` **globally**, so a bare `$`-operator object inside a
+  `mongoose.set('sanitizeFilter', true)` **globally**, so a bare `$`-admin object inside a
   filter is stripped and read as a literal value. The shop-ownership link table's two files
   (both since deleted with the shop collection itself) both passed
   `{ deleted: { $exists: false } }` unwrapped, and the first integration query answered:

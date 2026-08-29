@@ -15,13 +15,13 @@ interface IArgs {
  *
  * A separate operation from `itemUpdate` by decision, not by accident: saving the card is one thing an
  * owner does and publishing is another, and folding the second into the first made every save a write
- * of the flag. The operator tier has had this shape since it gained moderation — the same mutation
+ * of the flag. The admin tier has had this shape since it gained moderation — the same mutation
  * name, on 4024 — and this is the owner's side of it.
  *
  * One guard, unlike `itemUpdate`'s three: nothing moves here, so the only question is whether the item
  * named belongs to the session.
  *
- * No `validate*` call, like the operator tier's: `Boolean!` is the whole contract, so GraphQL has
+ * No `validate*` call, like the admin tier's: `Boolean!` is the whole contract, so GraphQL has
  * already rejected everything a validator would have.
  */
 export const itemUpdatePublished = {

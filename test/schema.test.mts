@@ -87,7 +87,7 @@ describe('schema', () => {
 	// `shopOwnerDel` is the owner's own account, and it is the only field here that is not about the
 	// catalogue: an owner may close their account themselves, which is the ShopOwner half of a decision the
 	// Admin tier already had. There is no `shopOwnerUpdateStatus` beside it and there must not be —
-	// suspension is the operator's instrument, and only the Admin tier lifts one.
+	// suspension is the admin's instrument, and only the Admin tier lifts one.
 	it('exposes the company and item mutations', () => {
 		expect(fieldsOf('MutationsApi')).toEqual([
 			'companyAdd',
