@@ -84,6 +84,10 @@ describe('schema', () => {
 	// are two operations, so an owner reopening a stale form cannot republish what someone took down.
 	// `itemsUpdatePublished` is the bulk half of the item one, for the select-all control on a list that
 	// is not paged — a separate field, so the singular's one-id contract stays exactly as narrow as it is.
+	// `shopOwnerDel` is the owner's own account, and it is the only field here that is not about the
+	// catalogue: an owner may close their account themselves, which is the ShopOwner half of a decision the
+	// Admin tier already had. There is no `shopOwnerUpdateStatus` beside it and there must not be —
+	// suspension is the operator's instrument, and only the Admin tier lifts one.
 	it('exposes the company and item mutations', () => {
 		expect(fieldsOf('MutationsApi')).toEqual([
 			'companyAdd',
@@ -94,7 +98,8 @@ describe('schema', () => {
 			'itemDel',
 			'itemUpdate',
 			'itemUpdatePublished',
-			'itemsUpdatePublished'
+			'itemsUpdatePublished',
+			'shopOwnerDel'
 		])
 	})
 
@@ -145,7 +150,8 @@ describe('mutation arguments', () => {
 		['itemDel', ['_id']],
 		['itemUpdate', ['_id', 'item']],
 		['itemUpdatePublished', ['_id', 'published']],
-		['itemsUpdatePublished', ['_ids', 'published']]
+		['itemsUpdatePublished', ['_ids', 'published']],
+		['shopOwnerDel', []]
 	])('%s takes %j', (name, expected) => {
 		expect(argsOf('MutationsApi', name)).toEqual(expected)
 	})
@@ -160,7 +166,8 @@ describe('mutation arguments', () => {
 		['itemDel', 'del item'],
 		['itemUpdate', 'update item'],
 		['itemUpdatePublished', 'publishes or unpublishes an item'],
-		['itemsUpdatePublished', 'publishes or unpublishes several items at once']
+		['itemsUpdatePublished', 'publishes or unpublishes several items at once'],
+		['shopOwnerDel', 'closes the signed-in shopOwner account']
 	])('%s carries its exact description', (name, description) => {
 		expect(descriptionOf('MutationsApi', name)).toBe(description)
 	})

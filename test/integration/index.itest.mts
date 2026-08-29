@@ -3,7 +3,12 @@ import { randomUUID } from 'node:crypto'
 import { redisClient } from '@axiumine/koa-utils/dataSources/Redis'
 import { decryptDocument } from '@axiumine/marketplace-common/encryption/decryptDocument'
 import { encryptDocument } from '@axiumine/marketplace-common/encryption/encryptDocument'
-import { ENCRYPTED_FIELDS_COMPANY, KEY_ALT_NAME_COMPANY } from '@axiumine/marketplace-common/encryption/encryptedFields'
+import {
+	ENCRYPTED_FIELDS_COMPANY,
+	ENCRYPTED_FIELDS_SHOP_OWNER,
+	KEY_ALT_NAME_COMPANY,
+	KEY_ALT_NAME_SHOP_OWNER
+} from '@axiumine/marketplace-common/encryption/encryptedFields'
 import { isCiphertext } from '@axiumine/marketplace-common/encryption/isCiphertext'
 import { sessionKey } from '@axiumine/marketplace-common/others/sessionKeys'
 import { TIER } from '@axiumine/marketplace-common/others/Tier'
@@ -79,6 +84,7 @@ async function withSession(_id = new mongoose.Types.ObjectId(), email = 'oste@ma
 
 const seededCompanies: mongoose.Types.ObjectId[] = []
 const seededItems: mongoose.Types.ObjectId[] = []
+const seededShopOwners: mongoose.Types.ObjectId[] = []
 const seededKeys: string[] = []
 
 /**
@@ -171,12 +177,58 @@ async function seedItem(idCompany: mongoose.Types.ObjectId, published = false) {
 	return _id
 }
 
+/**
+ * One shop owner, and the account the self-closure actually writes to.
+ *
+ * The raw driver again, so the seed is checked by `shopOwner`'s own `$jsonSchema`: `login` and
+ * `registeredAt` are the whole `required` list — `personalData` stopped being required when shop owners
+ * became able to sign themselves up — and `login.password` is a bcrypt hash, which the validator pins at
+ * exactly 60 characters. Nothing here ever logs in, so any 60 characters do.
+ *
+ * ⚠️ Encrypted before the insert (ADR-029): `login.email` is deterministic ciphertext and carries the
+ * platform's one globally unique index, so it is cut from the document's own `_id` — a fixed literal
+ * collides with the second seed of the same run, and with the leftovers of a run that died mid-drain.
+ *
+ * The approval gate is deliberately absent from the seed. This tier may not name that field at all — BC-03
+ * bans the identifier repo-wide, eslint included — so a fixture that set it could not be written here, and
+ * a closure that cleared it could not be written either. The operator's queue filters closed accounts out
+ * by `deleted` regardless.
+ */
+async function seedShopOwner(over: Record<string, unknown> = {}) {
+	const _id = new mongoose.Types.ObjectId()
+
+	await db()
+		.collection('shopOwner')
+		.insertOne(
+			await encryptDocument(
+				{
+					_id,
+					login: { email: `itest-${_id.toHexString()}@shopowner.invalid`, password: 'x'.repeat(60) },
+					registeredAt: new Date(),
+					...over
+				},
+				ENCRYPTED_FIELDS_SHOP_OWNER,
+				KEY_ALT_NAME_SHOP_OWNER
+			)
+		)
+	seededShopOwners.push(_id)
+
+	return _id
+}
+
 beforeAll(async () => {
 	;({ httpServer, base } = await bootServer())
 })
 
 // Drop whatever this run created while the handles are still open: documents, then every session key.
-afterAll(() => drainAndClose(httpServer, { companies: seededCompanies, items: seededItems, keys: seededKeys }))
+afterAll(() =>
+	drainAndClose(httpServer, {
+		companies: seededCompanies,
+		items: seededItems,
+		shopOwners: seededShopOwners,
+		keys: seededKeys
+	})
+)
 
 describe('authenticated-resource service (integration, real MongoDB + real Redis cluster)', () => {
 	// start() is what wires both datasources and arms ClamAV; asserting the live handles is what
@@ -576,6 +628,138 @@ describe('itemsUpdatePublished (the bulk publish against the real collections)',
 			const { json } = await bulkPublish([], true, session.headers)
 
 			expect(json.errors?.[0].message).toBe('Bad Request')
+		} finally {
+			await session.cleanup()
+		}
+	})
+})
+
+describe('shopOwnerDel (the owner closing their own account, against the real collections)', () => {
+	const CLOSE = 'mutation { shopOwnerDel }'
+
+	const shopOwnerDoc = async (_id: mongoose.Types.ObjectId) => await db().collection('shopOwner').findOne({ _id })
+
+	/*
+	 * ⚠️ **The stamp and the cascade, in one call and in one transaction.** A closed owner whose shop is
+	 * still on the public site is the single failure ADR-045 exists to prevent, and it is not a shape any
+	 * mocked test can rule out: the cascade's `$in` runs against real ciphertext-bearing documents, and an
+	 * unwrapped `$`-keyed filter would be rewritten by the global `sanitizeFilter` into a match on nothing
+	 * — every item left published, and every assertion but this one still green.
+	 */
+	it('stamps the account and darkens every company and item', async () => {
+		const owner = await seedShopOwner()
+		const session = await withSession(owner)
+		const company = await seedCompany(owner)
+		const item = await seedItem(company._id, true)
+
+		// On air the only way the collection allows: `PUBLISHED_IMPLIES_LINKABLE` refuses `published: true`
+		// without both a `slug` and a `publicName`, and `seedCompany` writes neither. The slug is a fresh
+		// UUID because it carries a unique index, exactly as the publish suite above does it.
+		await db()
+			.collection('company')
+			.updateOne(
+				{ _id: company._id },
+				{ $set: { published: true, publicName: 'Itest Storefront', slug: `itest-${randomUUID()}` } }
+			)
+
+		const { json } = await gql(CLOSE, session.headers)
+
+		expect(json.errors).toBeUndefined()
+		expect(json.data).toEqual({ shopOwnerDel: true })
+
+		const doc = await shopOwnerDoc(owner)
+
+		expect(doc?.deleted).toBeInstanceOf(Date)
+		expect((await db().collection('company').findOne({ _id: company._id }))?.published).toBe(false)
+		expect((await db().collection('item').findOne({ _id: item }))?.published).toBe(false)
+	})
+
+	/*
+	 * ⚠️ **No `deletedBy`, and the absence is the whole record** (ADR-044). `deleted` standing alone is what
+	 * says the account holder closed it themselves; an id written here — the owner's own included — makes a
+	 * self-closure indistinguishable from an operator's, which is the distinction the retention work and the
+	 * operator console both read.
+	 */
+	it('names no actor, which is what makes it a self-closure', async () => {
+		const owner = await seedShopOwner()
+		const session = await withSession(owner)
+
+		await gql(CLOSE, session.headers)
+
+		expect(await shopOwnerDoc(owner)).not.toHaveProperty('deletedBy')
+	})
+
+	/*
+	 * ⚠️ **A standing suspension survives the closure, in both directions.** Clearing it would let anyone
+	 * launder one by closing and registering again inside the thirty-day undo window; raising one would hand
+	 * the owner's own way back to an operator, since only the Admin tier lifts a suspension. The seed carries
+	 * the reason the collection's `dependencies` rule demands of every suspended document.
+	 */
+	it('leaves a suspension exactly as it found it', async () => {
+		const owner = await seedShopOwner({ disabled: true, disabledReason: 'suspended by the operator before the close' })
+		const session = await withSession(owner)
+
+		const { json } = await gql(CLOSE, session.headers)
+
+		expect(json.errors).toBeUndefined()
+
+		const doc = await shopOwnerDoc(owner)
+
+		expect(doc?.disabled).toBe(true)
+		expect(doc?.deleted).toBeInstanceOf(Date)
+	})
+
+	/*
+	 * The revoke, end to end: the token that closed the account is refused by the bearer gate on the very
+	 * next request. 498 rather than 403 — the session key is gone from the cluster, not merely rejected —
+	 * which is what says the closure ended the session rather than the resolver declining to serve it.
+	 */
+	it('leaves the caller signed out of the session it was called with', async () => {
+		const owner = await seedShopOwner()
+		const session = await withSession(owner)
+
+		await gql(CLOSE, session.headers)
+
+		const { status, json } = await gql('{ shopOwnerCompanies { _id } }', session.headers)
+
+		expect(status).toBe(498)
+		expect(json.message).toBe('Invalid Token')
+	})
+
+	/*
+	 * ⚠️ **The second close is refused rather than allowed to restamp.** `deleted` is what the hourly sweep
+	 * measures from and what ADR-046 turns into a thirty-day undo window, so a second stamp would push the
+	 * scrub thirty days out and postpone the erasure the first one promised. The second session is seeded
+	 * before the first call, because the first ends the one it was made with — this is the narrow window the
+	 * 410 exists for.
+	 */
+	it('answers 410 to a second close, and leaves the first stamp where it is', async () => {
+		const owner = await seedShopOwner()
+		const first = await withSession(owner)
+		const second = await withSession(owner)
+
+		await gql(CLOSE, first.headers)
+		const stamped = (await shopOwnerDoc(owner))?.deleted
+
+		try {
+			const { json } = await gql(CLOSE, second.headers)
+
+			expect(json.errors?.[0].message).toBe('Oops')
+			expect((await shopOwnerDoc(owner))?.deleted).toEqual(stamped)
+		} finally {
+			await second.cleanup()
+		}
+	})
+
+	// The other refusal: a session naming an account that is not in the collection at all. `withSession`
+	// mints a free id when it is given none, which is exactly that shape.
+	it('answers 401 when the session names no document', async () => {
+		const session = await withSession()
+
+		try {
+			const { json } = await gql(CLOSE, session.headers)
+
+			expect(json.errors?.[0].message).toBe('Unauthorized')
 		} finally {
 			await session.cleanup()
 		}

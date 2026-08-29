@@ -11,6 +11,8 @@ const throwIfShopOwnerDontOwnCompany = vi.fn()
 const funCompanyDelete = vi.fn()
 const funCompanyUpdate = vi.fn()
 const funCompanyUpdatePublished = vi.fn()
+const funShopOwnerDel = vi.fn()
+const endEverySession = vi.fn()
 
 // tryCatchRethrow is deliberately NOT mocked: turning a driver error into the right GraphQL status
 // is the behaviour under test here. Only Sentry is stubbed, so its `else` branch stays silent.
@@ -22,11 +24,14 @@ vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopO
 vi.mock('@lib/company/funCompanyDelete.mjs', () => ({ funCompanyDelete }))
 vi.mock('@lib/company/funCompanyUpdate.mjs', () => ({ funCompanyUpdate }))
 vi.mock('@lib/company/funCompanyUpdatePublished.mjs', () => ({ funCompanyUpdatePublished }))
+vi.mock('@lib/shopOwner/funShopOwnerDel.mjs', () => ({ funShopOwnerDel }))
+vi.mock('@lib/auth/endEverySession.mjs', () => ({ endEverySession }))
 
 const { companyAdd } = await import('../src/graphQLApi/schema/mutations/companyAdd.mts')
 const { companyDel } = await import('../src/graphQLApi/schema/mutations/companyDel.mts')
 const { companyUpdate } = await import('../src/graphQLApi/schema/mutations/companyUpdate.mts')
 const { companyUpdatePublished } = await import('../src/graphQLApi/schema/mutations/companyUpdatePublished.mts')
+const { shopOwnerDel } = await import('../src/graphQLApi/schema/mutations/shopOwnerDel.mts')
 
 const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
 const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
@@ -49,6 +54,8 @@ beforeEach(() => {
 	funCompanyDelete.mockResolvedValue(undefined)
 	funCompanyUpdate.mockResolvedValue(undefined)
 	funCompanyUpdatePublished.mockResolvedValue(undefined)
+	funShopOwnerDel.mockResolvedValue(undefined)
+	endEverySession.mockResolvedValue(undefined)
 })
 
 describe('companyAdd', () => {
@@ -216,5 +223,83 @@ describe('companyDel', () => {
 
 		await expect(run(companyDel, { _id: idCompany })).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+})
+
+describe('shopOwnerDel', () => {
+	/*
+	 * ⚠️ **The account closed is the one the request authenticated as, and no argument can move it.** Every
+	 * shop owner authenticates against the same collection and the platform has no role field, so an `_id`
+	 * accepted from the client would turn this into "close any owner's account". The extra argument here is
+	 * what a caller would send trying: the schema drops it, and the assertion says the resolver ignores it
+	 * even if it did not.
+	 */
+	it('closes the account named by the session, never one named by the caller', async () => {
+		await expect(run(shopOwnerDel, { _id: idCompany })).resolves.toBe(true)
+
+		expect(funShopOwnerDel).toHaveBeenCalledExactlyOnceWith(userId)
+	})
+
+	/*
+	 * ⚠️ **The revoke runs after the write and inside the same try, both deliberately.** Before it, an
+	 * account that then failed to close would have logged the owner out of every device for nothing.
+	 */
+	it('ends every session, after the account is closed', async () => {
+		await run(shopOwnerDel, {})
+
+		expect(endEverySession).toHaveBeenCalledExactlyOnceWith(ctx)
+		expect(funShopOwnerDel.mock.invocationCallOrder[0]).toBeLessThan(endEverySession.mock.invocationCallOrder[0])
+	})
+
+	/*
+	 * ⚠️ **A refused close ends no session.** The 410 an already-closed account answers with must not also
+	 * log the owner out — the account is still open in that case as far as this call is concerned, and a
+	 * failed mutation that signed the caller out everywhere would be a denial of service anyone could aim
+	 * at their own account by calling twice.
+	 */
+	it('keeps the sessions when the close was refused', async () => {
+		funShopOwnerDel.mockRejectedValueOnce(
+			new GraphQLError('Oops', { extensions: { http: { status: 410 }, description: 'account already closed' } })
+		)
+
+		await expect(run(shopOwnerDel, {})).rejects.toMatchObject({
+			message: 'Oops',
+			extensions: { http: { status: 410 }, description: 'account already closed' }
+		})
+		expect(endEverySession).not.toHaveBeenCalled()
+		expect(captureException).not.toHaveBeenCalled()
+	})
+
+	/*
+	 * ⚠️ **A Redis that refused is a 500, not a `true`.** The write has landed at this point, so answering
+	 * true is the tempting reading — and it would leave a closed account with every session still live,
+	 * which is the outcome the revoke exists to prevent. The owner sees a failure and calls again; the
+	 * second call finds the account closed and refuses, and the sessions are ended by the sweep or by the
+	 * operator. Reporting success would leave nobody looking.
+	 */
+	it('fails loudly when the sessions could not be ended', async () => {
+		endEverySession.mockRejectedValueOnce(driverError)
+
+		await expect(run(shopOwnerDel, {})).rejects.toThrow('Internal Server Error')
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+
+	it('turns a driver failure into a 500', async () => {
+		funShopOwnerDel.mockRejectedValueOnce(driverError)
+
+		await expect(run(shopOwnerDel, {})).rejects.toThrow('Internal Server Error')
+		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+
+	// The 401 the other refusal raises is a status the client acts on — it clears its own state and sends
+	// the owner to the login page — so it has to arrive as itself rather than as a 500.
+	it('keeps a downstream GraphQL error instead of flattening it', async () => {
+		funShopOwnerDel.mockRejectedValueOnce(new GraphQLError('Unauthorized', { extensions: { http: { status: 401 } } }))
+
+		await expect(run(shopOwnerDel, {})).rejects.toMatchObject({
+			message: 'Unauthorized',
+			extensions: { http: { status: 401 } }
+		})
+		expect(captureException).not.toHaveBeenCalled()
 	})
 })
