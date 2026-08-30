@@ -376,7 +376,7 @@ describe('itemUpdate', () => {
 	})
 
 	// ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
-	// under a category an operator is retiring in the same instant has to collide with that delete rather
+	// under a category an admin is retiring in the same instant has to collide with that delete rather
 	// than commit past it. The hold comes first: there is no point writing the item to find out.
 	it('holds the category and saves inside one transaction', async () => {
 		await run(itemUpdate, args)
@@ -442,7 +442,7 @@ describe('itemUpdate', () => {
 describe('itemUpdatePublished', () => {
 	// One guard, not three: nothing moves, so the only question is whether the item is the session's.
 	// The company and category guards must stay out of it — reaching for them here would make publishing
-	// fail on a category an operator retired, which has nothing to do with what the owner asked.
+	// fail on a category an admin retired, which has nothing to do with what the owner asked.
 	it('checks ownership alone, then delegates the flag', async () => {
 		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).resolves.toBe(true)
 

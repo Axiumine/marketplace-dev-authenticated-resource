@@ -17,7 +17,7 @@ import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLSt
  * only value the field could ever carry over the wire is `null`.
  *
  * `image` is added here and **not** to `GraphQLItemFrag`, which is the shared one: putting it there
- * would publish the field on the operator tier and the public tier at once, neither of which has a
+ * would publish the field on the admin tier and the public tier at once, neither of which has a
  * screen for it yet. This tier is where the picture is uploaded, so it is the tier that has to be able
  * to read back what the upload produced.
  *

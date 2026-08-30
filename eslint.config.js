@@ -9,7 +9,7 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort'
 const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts,ts,cts,mts}'))
 
 /*
- * ADR-044. Suspension is the operator's instrument end to end: the Admin tier raises it, and the Admin
+ * ADR-044. Suspension is the admin's instrument end to end: the Admin tier raises it, and the Admin
  * tier is the only hand that lifts it — *"if admin suspend an account, admin must remove the suspension
  * for allow the shopowner to log in again"*. A ShopOwner-tier service able to write any `disabled*`
  * field could clear a sanction standing against the very account making the request, which is the same
@@ -40,7 +40,7 @@ const DISABLED_NO_WRITE = [
 		selector:
 			'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
 		message:
-			"ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an operator removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
+			"ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an admin removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
 	}
 ]
 
@@ -93,7 +93,7 @@ const RESTRICTED_SYNTAX = [
 	},
 	// E01-S10 — the two `shopOwner` fields the Admin tier owns outright, refused here so that "no
 	// ShopOwner-tier service selects them" stops being a claim about how the code happens to be
-	// written today. `notes` is free text an operator wrote *about* a named person, encrypted at rest
+	// written today. `notes` is free text an admin wrote *about* a named person, encrypted at rest
 	// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
 	// is BC-03's approval gate itself: a service that could write it could approve its own account.
 	//
@@ -104,7 +104,7 @@ const RESTRICTED_SYNTAX = [
 	// resource resolver reading the flag would be re-deciding a question already answered, on a
 	// field it has no other business with. Keep all four shapes.
 	//
-	// The list and the whole argument live on `OPERATOR_ONLY_FIELDS_SHOP_OWNER` in
+	// The list and the whole argument live on `ADMIN_ONLY_FIELDS_SHOP_OWNER` in
 	// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
 	// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
 	// `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
@@ -121,7 +121,7 @@ const RESTRICTED_SYNTAX = [
 		selector:
 			"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
 		message:
-			"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an operator wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is OPERATOR_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+			"E01-S10: `shopOwner.notes` is the Admin tier's. It is what an admin wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is ADMIN_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
 	},
 	{
 		selector:

@@ -21,7 +21,7 @@ interface IArgs {
  * `published` flag is what the listing renders. The public tier filters it; this one must not.
  *
  * trusted(): `sanitizeFilter` is on globally, so a bare `{ $exists: false }` would be taken as a
- * literal value and cast against the `deleted` path instead of being read as an operator.
+ * literal value and cast against the `deleted` path instead of being read as an admin.
  */
 export const companyItems = {
 	type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLItem))),

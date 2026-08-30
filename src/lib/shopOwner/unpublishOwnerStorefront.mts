@@ -7,7 +7,7 @@ import { ClientSession, trusted, Types } from 'mongoose'
  * under one of those companies (ADR-045 and its Amendment).
  *
  * ⚠️ **The Admin tier holds an identical function, and the two must not drift.** Its copy hangs off a
- * suspension and off an operator closure; this one hangs off the owner closing their own account. The
+ * suspension and off an admin closure; this one hangs off the owner closing their own account. The
  * platform owner's ruling names both hands at once — *"so disable a shop owner, by shop owner or by
  * admin, unpublish companies and items"* — so a change to the rule is a change to both files, and the
  * honest fix is to move this into `marketplace-common` and delete both. That move is deliberately not

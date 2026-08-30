@@ -13,14 +13,14 @@ import mongoose, { trusted, Types } from 'mongoose'
  *
  * ⚠️ **No `deletedBy`, and the absence is the record** (ADR-044). That field holds an `admin._id`, so a
  * `deleted` stamp standing without one is what says the account holder closed it themselves. Writing the
- * owner's own id there would make a self-closure indistinguishable from an operator's — and a second
+ * owner's own id there would make a self-closure indistinguishable from an admin's — and a second
  * field naming which collection the actor came from would be a `role` field arriving by the back door,
  * which ADR-002 refuses.
  *
  * ⚠️ **`disabled` is not written here, in either direction, and that is the ruling rather than an
- * omission.** Suspension is the operator's instrument: *"if admin suspend an account, admin must remove
+ * omission.** Suspension is the admin's instrument: *"if admin suspend an account, admin must remove
  * the suspension for allow the shopowner to log in again"*. A self-closure that also suspended would
- * hand the owner's own way back to an operator, and a self-closure that *cleared* a standing suspension
+ * hand the owner's own way back to an admin, and a self-closure that *cleared* a standing suspension
  * would let anyone launder one by closing and re-registering. An owner suspended before they closed comes
  * back suspended.
  *
@@ -48,7 +48,7 @@ import mongoose, { trusted, Types } from 'mongoose'
  * outright by BC-03 — a ShopOwner-tier service able to write it is a service able to approve its own
  * account, which is why the eslint rule refuses the identifier anywhere in this repo. Nothing is lost by
  * obeying it: `shopOwnersActiveTblDb` already filters `deleted: { $exists: false }`, so a closed account is
- * out of the operator's queue whatever the flag says, and an owner who returns through the registration
+ * out of the admin's queue whatever the flag says, and an owner who returns through the registration
  * undo comes back in the state they left — approved if they were approved, waiting if they were waiting.
  *
  * `new Date()`, not `Date.now()`: the retention sweep compares `deleted` against a cutoff and the model's

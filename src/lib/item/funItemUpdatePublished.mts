@@ -6,7 +6,7 @@ import { trusted, Types } from 'mongoose'
 /**
  * Puts one item of the owner's on the public site, or takes it off, and touches nothing else.
  *
- * The owner's half of the pair the operator tier already had. Publishing is a decision about an item,
+ * The owner's half of the pair the admin tier already had. Publishing is a decision about an item,
  * not a property of the card, so it is one flag and one call — `funItemUpdate` no longer carries
  * `published` at all, and a save of the name, the description or the category leaves the flag where it
  * was. The window that used to exist is closed with it: a form opened before someone else flipped the

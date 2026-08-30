@@ -191,7 +191,7 @@ async function seedItem(idCompany: mongoose.Types.ObjectId, published = false) {
  *
  * The approval gate is deliberately absent from the seed. This tier may not name that field at all — BC-03
  * bans the identifier repo-wide, eslint included — so a fixture that set it could not be written here, and
- * a closure that cleared it could not be written either. The operator's queue filters closed accounts out
+ * a closure that cleared it could not be written either. The admin's queue filters closed accounts out
  * by `deleted` regardless.
  */
 async function seedShopOwner(over: Record<string, unknown> = {}) {
@@ -677,8 +677,8 @@ describe('shopOwnerDel (the owner closing their own account, against the real co
 	/*
 	 * ⚠️ **No `deletedBy`, and the absence is the whole record** (ADR-044). `deleted` standing alone is what
 	 * says the account holder closed it themselves; an id written here — the owner's own included — makes a
-	 * self-closure indistinguishable from an operator's, which is the distinction the retention work and the
-	 * operator console both read.
+	 * self-closure indistinguishable from an admin's, which is the distinction the retention work and the
+	 * admin console both read.
 	 */
 	it('names no actor, which is what makes it a self-closure', async () => {
 		const owner = await seedShopOwner()
@@ -692,11 +692,11 @@ describe('shopOwnerDel (the owner closing their own account, against the real co
 	/*
 	 * ⚠️ **A standing suspension survives the closure, in both directions.** Clearing it would let anyone
 	 * launder one by closing and registering again inside the thirty-day undo window; raising one would hand
-	 * the owner's own way back to an operator, since only the Admin tier lifts a suspension. The seed carries
+	 * the owner's own way back to an admin, since only the Admin tier lifts a suspension. The seed carries
 	 * the reason the collection's `dependencies` rule demands of every suspended document.
 	 */
 	it('leaves a suspension exactly as it found it', async () => {
-		const owner = await seedShopOwner({ disabled: true, disabledReason: 'suspended by the operator before the close' })
+		const owner = await seedShopOwner({ disabled: true, disabledReason: 'suspended by the admin before the close' })
 		const session = await withSession(owner)
 
 		const { json } = await gql(CLOSE, session.headers)

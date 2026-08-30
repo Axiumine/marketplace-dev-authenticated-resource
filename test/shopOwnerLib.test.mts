@@ -200,7 +200,7 @@ describe('funShopOwnerDel', () => {
 	 * write it is one able to approve its own account. The assertion is on the whole update rather than on
 	 * the flag by name, so that the eslint rule and this test cannot disagree about what is forbidden.
 	 */
-	it('writes one operator and nothing beside it', async () => {
+	it('writes one admin and nothing beside it', async () => {
 		mockStamp(1)
 		mockCascade()
 
@@ -215,7 +215,7 @@ describe('funShopOwnerDel', () => {
 	 * `$set` is compared by key rather than only the missing field: an actor arriving later under any other
 	 * name fails here too.
 	 */
-	it('records no actor, which is what tells a self-closure from an operator’s', async () => {
+	it('records no actor, which is what tells a self-closure from an admin’s', async () => {
 		mockStamp(1)
 		mockCascade()
 
@@ -226,7 +226,7 @@ describe('funShopOwnerDel', () => {
 
 	/*
 	 * ⚠️ **`disabled` is untouched in either direction, and that is the ruling rather than an omission.**
-	 * Setting it would hand the owner's own way back to an operator, since only the Admin tier lifts a
+	 * Setting it would hand the owner's own way back to an admin, since only the Admin tier lifts a
 	 * suspension; clearing it would let anyone launder a standing suspension by closing and coming back.
 	 * One assertion covers both directions: the test above pins the update to a lone `$set`, so a `$unset`
 	 * clearing the flag cannot arrive without failing there.
