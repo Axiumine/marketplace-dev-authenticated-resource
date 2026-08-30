@@ -2,7 +2,7 @@ import { GraphQLError } from 'graphql'
 import { Types } from 'mongoose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { IContextShopOwnerAuthenticatedResource } from '../src/lib/auth/IContextShopOwnerAuthenticatedResource.mts'
+import { ctx, driverError, ID_COMPANY, run, SHOP_OWNER_ID } from './shopOwnerResolverHarness.mts'
 
 const captureException = vi.fn()
 
@@ -33,23 +33,9 @@ const { companyUpdate } = await import('../src/graphQLApi/schema/mutations/compa
 const { companyUpdatePublished } = await import('../src/graphQLApi/schema/mutations/companyUpdatePublished.mts')
 const { shopOwnerDel } = await import('../src/graphQLApi/schema/mutations/shopOwnerDel.mts')
 
-const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
-const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
-
-const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwnerAuthenticatedResource
-
-/** Anything not a Mongo duplicate-key / [Validator] error ends up a 500 through tryCatchRethrow. */
-const driverError = new Error('connection reset')
-
-type Resolver = { resolve: (...a: never[]) => unknown }
-
-function run(mutation: Resolver, args: unknown) {
-	return mutation.resolve(null as never, args as never, ctx as never)
-}
-
 beforeEach(() => {
 	vi.clearAllMocks()
-	companyCreate.mockResolvedValue({ _id: idCompany })
+	companyCreate.mockResolvedValue({ _id: ID_COMPANY })
 	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
 	funCompanyDelete.mockResolvedValue(undefined)
 	funCompanyUpdate.mockResolvedValue(undefined)
@@ -65,10 +51,10 @@ describe('companyAdd', () => {
 	// no ownership guard to run first — the company does not exist yet, so `idShopOwner` is what
 	// establishes the ownership rather than what is checked.
 	it('stamps the caller as owner and creates the company', async () => {
-		await expect(run(companyAdd, args)).resolves.toEqual({ _id: idCompany })
+		await expect(run(companyAdd, args)).resolves.toEqual({ _id: ID_COMPANY })
 
 		const [doc] = companyCreate.mock.calls[0]
-		expect(doc).toMatchObject({ idShopOwner: userId, ...args.company })
+		expect(doc).toMatchObject({ idShopOwner: SHOP_OWNER_ID, ...args.company })
 		expect(doc._id).toBeInstanceOf(Types.ObjectId)
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 	})
@@ -110,13 +96,13 @@ describe('companyAdd', () => {
 })
 
 describe('companyUpdate', () => {
-	const args = { _id: idCompany, company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
+	const args = { _id: ID_COMPANY, company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
 
 	it('checks ownership then delegates the save and answers true', async () => {
 		await expect(run(companyUpdate, args)).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
-		expect(funCompanyUpdate).toHaveBeenCalledExactlyOnceWith(idCompany, userId, args.company)
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
+		expect(funCompanyUpdate).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID, args.company)
 	})
 
 	// The guard runs *before* the write, so a company belonging to someone else is never touched —
@@ -141,7 +127,7 @@ describe('companyUpdate', () => {
 })
 
 describe('companyUpdatePublished', () => {
-	const args = { _id: idCompany, published: true }
+	const args = { _id: ID_COMPANY, published: true }
 
 	// The same ownership guard `companyUpdate` runs, and then one flag: no input object, nothing else
 	// written. That separation is the point — an owner saving the card of a shop an admin has just
@@ -149,15 +135,15 @@ describe('companyUpdatePublished', () => {
 	it('checks ownership then delegates the flag and answers true', async () => {
 		await expect(run(companyUpdatePublished, args)).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
-		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(idCompany, userId, true)
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
+		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID, true)
 		expect(funCompanyUpdate).not.toHaveBeenCalled()
 	})
 
 	it('passes false through unchanged when the owner takes the shop off the site', async () => {
-		await expect(run(companyUpdatePublished, { _id: idCompany, published: false })).resolves.toBe(true)
+		await expect(run(companyUpdatePublished, { _id: ID_COMPANY, published: false })).resolves.toBe(true)
 
-		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(idCompany, userId, false)
+		expect(funCompanyUpdatePublished).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID, false)
 	})
 
 	it('does not write when the caller does not own the company', async () => {
@@ -191,10 +177,10 @@ describe('companyUpdatePublished', () => {
 
 describe('companyDel', () => {
 	it('checks ownership then delegates the delete and answers true', async () => {
-		await expect(run(companyDel, { _id: idCompany })).resolves.toBe(true)
+		await expect(run(companyDel, { _id: ID_COMPANY })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
-		expect(funCompanyDelete).toHaveBeenCalledExactlyOnceWith(idCompany, userId)
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
+		expect(funCompanyDelete).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID)
 	})
 
 	it('does not delete when the caller does not own the company', async () => {
@@ -202,7 +188,7 @@ describe('companyDel', () => {
 			new GraphQLError('Forbidden', { extensions: { http: { status: 403 } } })
 		)
 
-		await expect(run(companyDel, { _id: idCompany })).rejects.toMatchObject({ message: 'Forbidden' })
+		await expect(run(companyDel, { _id: ID_COMPANY })).rejects.toMatchObject({ message: 'Forbidden' })
 		expect(funCompanyDelete).not.toHaveBeenCalled()
 	})
 
@@ -211,7 +197,7 @@ describe('companyDel', () => {
 	it('keeps a downstream GraphQL error instead of flattening it', async () => {
 		funCompanyDelete.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
 
-		await expect(run(companyDel, { _id: idCompany })).rejects.toMatchObject({
+		await expect(run(companyDel, { _id: ID_COMPANY })).rejects.toMatchObject({
 			message: 'Conflict',
 			extensions: { http: { status: 409 } }
 		})
@@ -221,7 +207,7 @@ describe('companyDel', () => {
 	it('turns a driver failure into a 500', async () => {
 		funCompanyDelete.mockRejectedValueOnce(driverError)
 
-		await expect(run(companyDel, { _id: idCompany })).rejects.toThrow('Internal Server Error')
+		await expect(run(companyDel, { _id: ID_COMPANY })).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
 	})
 })
@@ -235,9 +221,9 @@ describe('shopOwnerDel', () => {
 	 * even if it did not.
 	 */
 	it('closes the account named by the session, never one named by the caller', async () => {
-		await expect(run(shopOwnerDel, { _id: idCompany })).resolves.toBe(true)
+		await expect(run(shopOwnerDel, { _id: ID_COMPANY })).resolves.toBe(true)
 
-		expect(funShopOwnerDel).toHaveBeenCalledExactlyOnceWith(userId)
+		expect(funShopOwnerDel).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID)
 	})
 
 	/*

@@ -2,7 +2,7 @@ import { GraphQLError } from 'graphql'
 import { Types } from 'mongoose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { IContextShopOwnerAuthenticatedResource } from '../src/lib/auth/IContextShopOwnerAuthenticatedResource.mts'
+import { driverError, ID_COMPANY, run, SHOP_OWNER_ID } from './shopOwnerResolverHarness.mts'
 
 const captureException = vi.fn()
 
@@ -74,18 +74,14 @@ const { itemUpdatePublished } = await import('../src/graphQLApi/schema/mutations
 const { MAX_ITEMS_PER_CALL, itemsUpdatePublished } = await import('../src/graphQLApi/schema/mutations/itemsUpdatePublished.mts')
 const { itemDel } = await import('../src/graphQLApi/schema/mutations/itemDel.mts')
 
-const userId = new Types.ObjectId('507f1f77bcf86cd799439011')
-const idCompany = new Types.ObjectId('507f1f77bcf86cd799439015')
 const idCategory = new Types.ObjectId('507f1f77bcf86cd799439030')
 const itemId = new Types.ObjectId('507f1f77bcf86cd799439020')
 const otherItemId = new Types.ObjectId('507f1f77bcf86cd799439021')
 
-const ctx = { state: { user: { _id: userId } } } as unknown as IContextShopOwnerAuthenticatedResource
-
 // No `published`: it left `GraphQLInputItem` when publishing became its own mutation, so a client that
 // still sent it would be rejected by GraphQL before any of this ran.
 const item = {
-	idCompany,
+	idCompany: ID_COMPANY,
 	idCategory,
 	name: 'Sneaker',
 	description: 'Baked this morning',
@@ -106,19 +102,10 @@ const stored = {
 	destBaseName: '507f1f77bcf86cd799439020'
 }
 
-/** Anything not a Mongo duplicate-key / [Validator] error ends up a 500 through tryCatchRethrow. */
-const driverError = new Error('connection reset')
-
 // The shapes the two mocked guards really raise: `throwForbiddenError` names the status, while every
 // koa-utils 404 carries the generic 'Oops' and puts the meaning in the status alone.
 const forbidden = () => new GraphQLError('Forbidden', { extensions: { http: { status: 403 } } })
 const notFound = () => new GraphQLError('Oops', { extensions: { http: { status: 404 } } })
-
-type Resolver = { resolve: (...a: never[]) => unknown }
-
-function run(mutation: Resolver, args: unknown) {
-	return mutation.resolve(null as never, args as never, ctx as never)
-}
 
 beforeEach(() => {
 	vi.clearAllMocks()
@@ -144,7 +131,7 @@ describe('itemAdd', () => {
 	it('checks the shop then the category, and creates the item with a fresh _id', async () => {
 		const created = (await run(itemAdd, { item })) as { _id: Types.ObjectId }
 
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
 		expect(throwIfItemCategoryMissing).toHaveBeenCalledExactlyOnceWith(idCategory)
 
 		const [[doc], options] = itemCreate.mock.calls[0]
@@ -261,7 +248,7 @@ describe('itemAdd', () => {
 		expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
 			stored.tempFile,
 			'item',
-			idCompany.toHexString(),
+			ID_COMPANY.toHexString(),
 			stored.destBaseName
 		)
 
@@ -369,10 +356,10 @@ describe('itemUpdate', () => {
 	it('checks the item, then the destination shop, then the category, and delegates the save', async () => {
 		await expect(run(itemUpdate, args)).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(userId, idCompany)
+		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
+		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
 		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
-		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, userId, item, session)
+		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, item, session)
 	})
 
 	// ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
@@ -446,13 +433,13 @@ describe('itemUpdatePublished', () => {
 	it('checks ownership alone, then delegates the flag', async () => {
 		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
+		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
 		// Nothing is re-filed, so nothing holds the category and no transaction is opened either.
 		expect(holdItemCategory).not.toHaveBeenCalled()
 		expect(startSession).not.toHaveBeenCalled()
-		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, userId, true)
+		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, true)
 	})
 
 	// Both directions through the same resolver: withdrawing is the same call with the flag the other
@@ -460,7 +447,7 @@ describe('itemUpdatePublished', () => {
 	it('passes false through unchanged when the owner withdraws the item', async () => {
 		await expect(run(itemUpdatePublished, { _id: itemId, published: false })).resolves.toBe(true)
 
-		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, userId, false)
+		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, false)
 	})
 
 	it('does not write when the item is not the caller’s', async () => {
@@ -501,11 +488,11 @@ describe('itemsUpdatePublished', () => {
 	it('checks the whole list once, then delegates the flag for all of it', async () => {
 		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(userId, itemIds)
+		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
 		expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
 		expect(startSession).not.toHaveBeenCalled()
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, true)
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
 	})
 
 	// The direction the select-all control exists for: an owner taking a whole shop off the public site
@@ -513,7 +500,7 @@ describe('itemsUpdatePublished', () => {
 	it('passes false through unchanged when the owner withdraws the whole list', async () => {
 		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: false })).resolves.toBe(true)
 
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, false)
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, false)
 	})
 
 	// ⚠️ A repeated id has to be collapsed before the guard sees it, not after: the guard counts documents
@@ -522,8 +509,8 @@ describe('itemsUpdatePublished', () => {
 	it('collapses a repeated id before checking ownership and before writing', async () => {
 		await expect(run(itemsUpdatePublished, { _ids: [itemId, otherItemId, itemId], published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(userId, itemIds)
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, userId, true)
+		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
 	})
 
 	// ⚠️ 400 and not a quiet `true`. An empty selection is a client that lost track of what was ticked,
@@ -568,7 +555,7 @@ describe('itemsUpdatePublished', () => {
 
 		await expect(run(itemsUpdatePublished, { _ids: [...ids, ids[0]], published: true })).resolves.toBe(true)
 
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(ids, userId, true)
+		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(ids, SHOP_OWNER_ID, true)
 	})
 
 	// All or nothing: one stranger's id in the list refuses every item in it, including the ones the
@@ -603,8 +590,8 @@ describe('itemDel', () => {
 	it('checks ownership then delegates the withdrawal and answers true', async () => {
 		await expect(run(itemDel, { _id: itemId })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(userId, itemId)
-		expect(funItemDelete).toHaveBeenCalledExactlyOnceWith(itemId, userId)
+		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
+		expect(funItemDelete).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID)
 		// A withdrawal leaves `idCategory` where it is, so it races nothing on the taxonomy.
 		expect(holdItemCategory).not.toHaveBeenCalled()
 		expect(startSession).not.toHaveBeenCalled()
