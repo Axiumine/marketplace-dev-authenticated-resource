@@ -47,7 +47,6 @@ vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
 }))
 
 const { funShopOwnerDel } = await import('../src/lib/shopOwner/funShopOwnerDel.mts')
-const { unpublishOwnerStorefront } = await import('../src/lib/shopOwner/unpublishOwnerStorefront.mts')
 
 const _id = new Types.ObjectId('507f1f77bcf86cd799439011')
 
@@ -123,59 +122,6 @@ beforeEach(() => {
 	itemUpdateMany.mockReset()
 	withTransaction.mockImplementation(async (work: () => Promise<void>) => await work())
 	threaded.length = 0
-})
-
-describe('unpublishOwnerStorefront', () => {
-	it('withdraws every company the owner holds and every item filed under one', async () => {
-		mockCascade(...shopIds)
-
-		await expect(unpublishOwnerStorefront(_id, inSession)).resolves.toBeUndefined()
-
-		expectCascade(shopIds)
-	})
-
-	/*
-	 * ⚠️ **The `$in` carries mongoose's trusted marker, and the assertion compares it.** `sanitizeFilter` is
-	 * global in this service: an untrusted `$in` is stripped on the way to the driver, which turns the item
-	 * hop into a filter that matches nothing — every item stays published under a shop that has just gone
-	 * dark, and nothing fails. `toEqual` compares symbol-keyed properties, so a dropped `trusted()` fails here.
-	 */
-	it('marks the item filter as trusted', async () => {
-		mockCascade(...shopIds)
-
-		await unpublishOwnerStorefront(_id, inSession)
-
-		const [filter] = itemUpdateMany.mock.calls[0]
-
-		expect(filter.idCompany).toEqual(trusted({ $in: shopIds }))
-	})
-
-	/*
-	 * ⚠️ Every query joins the caller's transaction, this one included. The cascade is the half of the close
-	 * that ADR-045 makes atomic with the stamp: a company read or an item write outside the transaction sees
-	 * — and leaves behind — a state the stamp is still free to roll back.
-	 */
-	it('runs all three queries inside the transaction it was handed', async () => {
-		mockCascade(...shopIds)
-
-		await unpublishOwnerStorefront(_id, inSession)
-
-		expect(threaded).toEqual([inSession, inSession, inSession])
-	})
-
-	/*
-	 * An owner with no companies is a real account — one that registered and never opened a shop. The company
-	 * ids collapse to `$in: []`, which matches nothing and writes nothing, and both `updateMany` calls are
-	 * still made: a `length > 0` short-circuit would be an extra branch buying nothing the driver does not
-	 * already do.
-	 */
-	it('asks for an empty set when the owner holds no company', async () => {
-		mockCascade()
-
-		await expect(unpublishOwnerStorefront(_id, inSession)).resolves.toBeUndefined()
-
-		expectCascade([])
-	})
 })
 
 describe('funShopOwnerDel', () => {

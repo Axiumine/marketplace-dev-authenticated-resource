@@ -1,7 +1,7 @@
 import { throwGoneError } from '@axiumine/koa-utils/graphQL/throw/throwGoneError'
 import { throwUnauthorizedError } from '@axiumine/koa-utils/graphQL/throw/throwUnauthorizedError'
 import { ShopOwner } from '@axiumine/marketplace-common/models/MongoDB/ShopOwner'
-import { unpublishOwnerStorefront } from '@lib/shopOwner/unpublishOwnerStorefront.mjs'
+import { unpublishOwnerStorefront } from '@axiumine/marketplace-common/others/unpublishOwnerStorefront'
 import mongoose, { trusted, Types } from 'mongoose'
 
 /**
