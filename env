@@ -118,10 +118,10 @@ UPLOAD_DIR=/media/xxx
 # never binds. Over 5 MB the upload answers 500.
 STATIC_FOLDER=/media/xxx/static
 
-# No SOCKETLABS_* here: this service sends no mail, and E18-S10 took both the credential pair and the
-# @socketlabs/email dependency out. Only marketplace-dev-public-resource needs them.
+# No SOCKETLABS_* here: this service sends no mail, and both the credential pair and the
+# @socketlabs/email dependency are gone. Only marketplace-dev-public-resource needs them.
 #
-# ⚠️ Six names stood here and are gone, E18-S13, out of this file and out of REQUIRED_ENV_VARS in the
+# ⚠️ Six names stood here and are gone, out of this file and out of REQUIRED_ENV_VARS in the
 # same commit. EMAIL_FROM, PLATFORM_NAME and DEV_TEAM_EMAIL are read only by SocketLabsLib — the first
 # two in its constructor, the third in alertDevTeam() and sendEmailPostReported() — and this service
 # imports no part of it. REDIRECT_DOMAIN, HIT_STATS and SAMESITE_COOKIE are read by nothing anywhere:
@@ -132,7 +132,7 @@ STATIC_FOLDER=/media/xxx/static
 # `sameSite: 'Strict'` in @axiumine/koa-utils/dist/lib/tokenOptions.mjs, which reads no variable, and
 # the `Secure` half is the edge's rewrite (ADR-034). The value `lax` sat in every environment saying
 # the cookie was laxer than it is. Do not add any of the six back.
-# ⚠️ Development-only, and the gate is code rather than convention (E13-S11): the
+# ⚠️ Development-only, and the gate is code rather than convention: the
 # `x-introspectioncode` header is honoured only when NODE_ENV is exactly `development` or `test`, and
 # refused under every other value — unset, empty, `staging`, `Production`, a typo. In production it
 # does nothing at all, and a request carrying it is answered exactly as one carrying nothing.

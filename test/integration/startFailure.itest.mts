@@ -57,7 +57,7 @@ describe('start() when MongoDB refuses the connection', () => {
 	 * and the process dies without touching a datasource. Driven through start() rather than by
 	 * calling checkRequiredEnv() directly, so it is that ordering being tested and not just the
 	 * guard's own loop. It used to delete PLATFORM_NAME, which nothing in this suite's setup touched —
-	 * until E18-S13 took that variable out of REQUIRED_ENV_VARS as read by nothing, at which point the
+	 * until that variable left REQUIRED_ENV_VARS as read by nothing, at which point the
 	 * boot no longer minded its absence and this test failed on the real service reaching MongoDB.
 	 * INTROSPECTION_CODE replaces it and is the better choice anyway: it is the LAST entry of the list,
 	 * so a mutant that stops the loop one short fails here as well as in the unit suite. It is pinned by
