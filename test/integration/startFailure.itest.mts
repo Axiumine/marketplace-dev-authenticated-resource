@@ -59,22 +59,22 @@ describe('start() when MongoDB refuses the connection', () => {
 	 * guard's own loop. It used to delete PLATFORM_NAME, which nothing in this suite's setup touched —
 	 * until that variable left REQUIRED_ENV_VARS as read by nothing, at which point the
 	 * boot no longer minded its absence and this test failed on the real service reaching MongoDB.
-	 * INTROSPECTION_CODE replaces it and is the better choice anyway: it is the LAST entry of the list,
-	 * so a mutant that stops the loop one short fails here as well as in the unit suite. It is pinned by
-	 * vitest.config.mts to a literal, so the restore in `finally` puts back exactly what was there — and
-	 * the delete window closes before anything else in the process can read it.
+	 * STATIC_FOLDER replaces it and is the better choice anyway: it is the LAST entry of the list, so a
+	 * mutant that stops the loop one short fails here as well as in the unit suite. The restore in
+	 * `finally` puts back exactly what was there, and the delete window closes before anything else in the
+	 * process can read it.
 	 */
 	it('refuses to boot at all, and connects nothing, when a required variable is missing', async () => {
-		const realKey = process.env.INTROSPECTION_CODE
-		delete process.env.INTROSPECTION_CODE
+		const realKey = process.env.STATIC_FOLDER
+		delete process.env.STATIC_FOLDER
 
 		try {
-			await expect(start()).rejects.toThrow('Missing required environment variable: INTROSPECTION_CODE')
+			await expect(start()).rejects.toThrow('Missing required environment variable: STATIC_FOLDER')
 
 			expect(mongoose.connection.readyState).toBe(0)
 			expect(redisClient.isOpen).toBe(false)
 		} finally {
-			process.env.INTROSPECTION_CODE = realKey
+			process.env.STATIC_FOLDER = realKey
 		}
 	})
 })

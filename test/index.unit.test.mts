@@ -71,7 +71,6 @@ describe('checkRequiredEnv', () => {
 			'MONGODB_URI',
 			'CSFLE_MASTER_KEY_PATH',
 			'CSFLE_KEY_VAULT_NAMESPACE',
-			'INTROSPECTION_CODE',
 			'STATIC_FOLDER'
 		])
 	})
@@ -90,9 +89,8 @@ describe('checkRequiredEnv', () => {
 	// The *last* entry, so a mutant that stops the loop short is caught and not just one that skips
 	// index 0. It used to be DSN, which is no longer required at all: Sentry is optional, and an
 	// unset DSN leaves the SDK inert rather than stopping the service from serving. Then it was
-	// SAMESITE_COOKIE, which left the list as read by nothing, then INTROSPECTION_CODE — the name has
-	// to be the one the list ends with today, so this assertion moves every time the tail of the list
-	// does. It ends with STATIC_FOLDER now: `moveFileStaticDomain` interpolates it into the destination
+	// SAMESITE_COOKIE, which left the list as read by nothing — the name has to be the one the list ends
+	// with today, so this assertion moves every time the tail of the list does. It ends with STATIC_FOLDER now: `moveFileStaticDomain` interpolates it into the destination
 	// path, and unset it does not fail — the picture lands under a directory literally named
 	// `undefined`, which no vhost serves.
 	it('names a variable missing further down the list', () => {

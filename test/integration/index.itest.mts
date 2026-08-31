@@ -25,7 +25,6 @@ import { ENDPOINT } from '../../src/index.mts'
 import { bootServer, db, drainAndClose } from './harness.mts'
 
 const REDIS_KEY = process.env.REDIS_KEY as string
-const INTROSPECTION_CODE = process.env.INTROSPECTION_CODE as string
 
 let httpServer: Server
 let base: string
@@ -348,16 +347,22 @@ describe('GraphQL over HTTP', () => {
 
 	// Introspection stays open outside production (buildValidationRules returns no rules), and the
 	// schema it reports is the one really assembled in createServer — not a copy rebuilt by a test.
-	it('exposes the assembled schema to a caller carrying the introspection code', async () => {
-		const { status, json } = await gql('{ __schema { queryType { name } mutationType { name } } }', {
-			'x-introspectioncode': INTROSPECTION_CODE
-		})
+	// It still travels the ordinary way in: every request to this service carries a session or is
+	// refused before Apollo sees it.
+	it('exposes the assembled schema to an authenticated caller', async () => {
+		const session = await withSession()
 
-		expect(status).toBe(200)
-		expect(json.errors).toBeUndefined()
-		expect(json.data).toEqual({
-			__schema: { queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } }
-		})
+		try {
+			const { status, json } = await gql('{ __schema { queryType { name } mutationType { name } } }', session.headers)
+
+			expect(status).toBe(200)
+			expect(json.errors).toBeUndefined()
+			expect(json.data).toEqual({
+				__schema: { queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } }
+			})
+		} finally {
+			await session.cleanup()
+		}
 	})
 
 	it('rejects a GET on the GraphQL endpoint (csrfPrevention / method not allowed)', async () => {

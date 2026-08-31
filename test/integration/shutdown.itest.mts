@@ -58,9 +58,8 @@ describe('production hardening actually applies to a real server', () => {
 	 *
 	 * Unlike the public tier, this service gates every request behind
 	 * authorizationAuthenticatedResourceHandler BEFORE it ever reaches Apollo, so a bare request
-	 * would be refused at 412 and never touch the validation rules at all. The `x-introspectioncode`
-	 * bypass (already exercised in index.itest.mts) is what gets a request past that gate without
-	 * needing a Redis-backed session.
+	 * would be refused at 412 and never touch the validation rules at all — hence the real access
+	 * session written into Redis below, which is the only way past that gate.
 	 */
 	it('refuses introspection when booted as production', async () => {
 		const realNodeEnv = process.env.NODE_ENV

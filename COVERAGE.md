@@ -82,7 +82,7 @@ sources' own `dotenv.config()`). It overrides only the keyspace prefix
 (`REDIS_KEY=marketplaceDev:itest:authenticatedResource:`, this service's own isolated, ACL-allowed
 namespace — the `marketplaceDev:itest:` stem is shared because the ACL grants that pattern, but the
 third segment is unique per service so all seven can run their integration suites at once),
-`PORT=0` (ephemeral) and `INTROSPECTION_CODE`. Run just one side with `yarn test:unit` /
+and `PORT=0` (ephemeral). Run just one side with `yarn test:unit` /
 `yarn test:integration`.
 
 Consequence: the coverage gate — and therefore `pre-push` — needs Redis, MongoDB and clamd
@@ -225,11 +225,6 @@ it explains a decision, a pattern, or a defect, not because the code it names is
   `trusted(...)` too, so a regression on the survivor still fails the suite.
 - The shop-update mutation file — **deleted**, twice over: first as an
   empty file with no export and no importer, then for good along with the rest of the shop collection.
-- `authorizationAuthenticatedResourceHandler` — the `x-introspectioncode` bypass dereferenced a
-  missing `Authorization` header (`authorization!.startsWith(...)`) and threw a `TypeError`,
-  so it could never succeed and the `if (!introspection)` guard below it was unreachable.
-  Guarded with `!introspection &&`, matching the sibling services. The dead
-  `accessToken !== ''` check and an unused `operationName` block went with it.
 - **Un-awaited `Model.create()`** across the `*Add` mutations — `return Model.create(doc)`
   inside a `try` means the promise escapes before the `catch` can see it, so a write failure
   surfaced as an unhandled rejection instead of a GraphQL error. All now `return await`.
