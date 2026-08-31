@@ -18,12 +18,12 @@ import { describe, expect, it } from 'vitest'
 
 const FIXTURES = new URL('./fixtures/restrictedSyntax/', import.meta.url)
 
-const TLS_MESSAGE = 'E12-S04: certificate verification stays on.'
-const PII_MESSAGE = 'E12-S04: the blanket Sentry PII flag is absent by decision, not set to false.'
-const BODY_MESSAGE = 'E12-S21: the request body is never captured.'
-const HOOKS_MESSAGE = 'E12-S22: `beforeSend` and `beforeSendTransaction` are wired together or not at all.'
-const NOTES_MESSAGE = 'E01-S10: `shopOwner.notes` is the Admin tier'
-const WAIT_APPROV_MESSAGE = 'E01-S10: `shopOwner.waitApprov` is BC-03'
+const TLS_MESSAGE = 'certificate verification stays on.'
+const PII_MESSAGE = 'the blanket Sentry PII flag is absent by decision, not set to false.'
+const BODY_MESSAGE = 'the request body is never captured.'
+const HOOKS_MESSAGE = '`beforeSend` and `beforeSendTransaction` are wired together or not at all.'
+const NOTES_MESSAGE = '`shopOwner.notes` is the Admin tier'
+const WAIT_APPROV_MESSAGE = '`shopOwner.waitApprov` is BC-03'
 
 const DISABLED_MESSAGE = 'ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier'
 
@@ -81,7 +81,7 @@ describe('the block stays silent on the shape the services carry', () => {
 		expect(await lintFixture('compliant')).toStrictEqual([])
 	})
 
-	// The negative half of E01-S10, and the half that decides whether the rule survives contact with a
+	// The negative half of the admin-only field ban, and the half that decides whether the rule survives contact with a
 	// reviewer: the real login and refresh projections stay silent, and so does prose naming either
 	// field. `waitApprov` written with a colon after it — the way every comment in these repos writes
 	// it — is outside the word boundary the selector matches on, by construction rather than by luck.
@@ -103,7 +103,7 @@ describe('the block stays silent on the shape the services carry', () => {
  * firing on the reason the flag works at all.
  */
 describe('the disabled* write ban is scoped to src/**', () => {
-	// Four write shapes, because a `Property`-only rule passes the assignment the E12-S04 audit actually
+	// Four write shapes, because a `Property`-only rule passes the assignment the telemetry audit actually
 	// found one field over, and the quoted key parses to a `key.value` where the plain one has a `key.name`.
 	it.each([
 		'disabled-no-write-property',
