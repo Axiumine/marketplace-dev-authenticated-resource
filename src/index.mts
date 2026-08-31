@@ -59,7 +59,6 @@ export const REQUIRED_ENV_VARS = [
 	// reads no variable, and the edge's `Secure` rewrite (ADR-034) is nginx config. A variable required at
 	// boot and read by nothing teaches admins that this list is noise, which is the one thing it cannot
 	// afford to be.
-	'INTROSPECTION_CODE',
 	// Read by `moveFileStaticDomain` (koa-utils, `files/`), which `itemAdd` calls once a picture has
 	// been uploaded. Required at boot rather than left to fail at the call: unset, the destination
 	// directory string starts with the literal `undefined`, `fs.ensureDir` creates it relative to the
