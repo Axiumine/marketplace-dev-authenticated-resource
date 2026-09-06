@@ -7,9 +7,13 @@ const captureMessage = vi.fn()
 const RedisConnect = vi.fn()
 const MongoDBConnect = vi.fn()
 const initClamScan = vi.fn()
+const reportClamSignatureAge = vi.fn()
 const disconnectAllDatabases = vi.fn()
 const setupFieldEncryption = vi.fn()
 const hGetAll = vi.fn()
+
+/** The NodeClam initClamScan() hands back — identity is all start() does with it, so it needs no behaviour. */
+const clamScanner = { getVersion: vi.fn() }
 
 vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
 // redisClient is imported transitively by the handler, and start() itself now reads one key off it:
@@ -23,6 +27,9 @@ vi.mock('@axiumine/koa-utils/dataSources/MongoDB', () => ({ MongoDBConnect }))
 // asserted below.
 vi.mock('@axiumine/marketplace-common/encryption/setupFieldEncryption', () => ({ setupFieldEncryption }))
 vi.mock('@axiumine/koa-utils/files/scanVirus', () => ({ initClamScan }))
+// Mocked because the real one talks to the daemon initClamScan just opened. What start() owes it is
+// that it is handed that daemon and awaited; what it does with the answer is its own suite's business.
+vi.mock('@lib/clam/reportClamSignatureAge.mjs', () => ({ reportClamSignatureAge }))
 vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases }))
 
 const {
@@ -394,7 +401,9 @@ function resetStartMocks() {
 	RedisConnect.mockReset().mockResolvedValue(undefined)
 	MongoDBConnect.mockReset().mockResolvedValue(undefined)
 	setupFieldEncryption.mockReset().mockResolvedValue(undefined)
-	initClamScan.mockReset().mockResolvedValue(undefined)
+	// The scanner start() gets back, and the only member anything downstream of it reads.
+	initClamScan.mockReset().mockResolvedValue(clamScanner)
+	reportClamSignatureAge.mockReset().mockResolvedValue({ state: 'fresh', alerted: false, detail: 'stubbed' })
 	// A seeded namespace, so every test below is about the failure it arms rather than about the
 	// keygrip probe start() now runs first. Only `wrapped` is read — presence, never the value.
 	hGetAll.mockReset().mockResolvedValue({ wrapped: 'seeded' })
@@ -477,6 +486,20 @@ describe('start (failure path)', () => {
 		expect(captureException).toHaveBeenCalledWith(error)
 		expect(disconnectAllDatabases).toHaveBeenCalledWith(1)
 		expect(errorLog).toHaveBeenCalledWith('error', error)
+		// Nothing asks a scanner that failed to start how old its signatures are.
+		expect(reportClamSignatureAge).not.toHaveBeenCalled()
+	})
+
+	/*
+	 * A reachable scanner and a current one are not the same claim, and only the second one keeps an
+	 * upload safe — RISK_REGISTER R22. This asserts the reading happens at boot and is handed the daemon
+	 * initClamScan opened; that a stale answer is reported rather than thrown on is asserted where the
+	 * reading itself lives, in test/reportClamSignatureAge.test.mts.
+	 */
+	it('asks the scanner it just opened how old its signatures are', async () => {
+		await start()
+
+		expect(reportClamSignatureAge).toHaveBeenCalledExactlyOnceWith(clamScanner)
 	})
 
 	// A service that came up with field encryption broken would answer queries with ciphertext and
