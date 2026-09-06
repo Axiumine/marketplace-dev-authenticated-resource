@@ -1,0 +1,4 @@
+import { ItemCategory } from '@axiumine/marketplace-common/models/MongoDB/ItemCategory'
+
+export const holdItemCategory = async (id: string) =>
+	ItemCategory.findOneAndUpdate({ _id: id }, { $inc: { __v: 1 } }, { projection: { _id: 1 } })
