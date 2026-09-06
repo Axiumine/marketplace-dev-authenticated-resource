@@ -131,6 +131,77 @@ const RESTRICTED_SYNTAX = [
 	}
 ]
 
+/*
+ * ADR-012, and the one thing holding the two-level category cap up.
+ *
+ * The cap is enforced in a resolver — `throwIfParentNotTopLevel`, in
+ * `marketplace-dev-admin-authenticated-resource` — and not in the collection's `$jsonSchema`, because a
+ * validator cannot read a second document to find out how deep the one in front of it sits. That is a
+ * MongoDB limit rather than a design preference, and ADR-012 accepts it. What it costs is that the cap
+ * holds exactly as long as every write to `itemCategory` goes through the four functions that call the
+ * check. A write added on any other tier is a third level with nothing to refuse it, and nothing
+ * structural noticed. RISK_REGISTER R19.
+ *
+ * Two selectors for the call rather than one: `ItemCategory.updateOne(...)` and
+ * `ItemCategory['updateOne'](...)` are the same write, and a `property.name` rule passes the second — the
+ * same `key.name` / `key.value` split the TLS selectors above already carry. A third for the import,
+ * because both call selectors are keyed on the identifier and an alias would rename the model out of
+ * their reach.
+ *
+ * ⚠️ **A write ban, not a ban.** The read verbs are absent on purpose: `throwIfItemCategoryMissing`
+ * counts, the catalogue resolvers query, and a rule refusing those would refuse the tier's own work.
+ */
+const ITEMCATEGORY_NO_WRITE = [
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
+		message:
+			'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
+	}
+]
+
+/*
+ * The one write to `itemCategory` outside the Admin tier, and the reason it is one file wide.
+ *
+ * `holdItemCategory` stamps `$inc: { __v: 1 }` and nothing else, so a category cannot be deleted out
+ * from under an item being created against it — ADR-012's 2026-08-25 amendment names this exact call as
+ * the deliberate exception. It writes no domain field, cannot move a parent, and so cannot reach the
+ * depth cap. `test/itemLib.test.mts` pins the payload exactly, under mutation testing.
+ *
+ * The exemption is one file wide and one verb wide: every other write verb stays banned inside
+ * `holdItemCategory.mts` too, and `findOneAndUpdate` stays banned in every other file of this repo.
+ */
+const ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD = [
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector:
+			"CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
+		message:
+			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+	},
+	{
+		selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
+		message:
+			'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
+	}
+]
+
 export default [
 	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
 	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
@@ -200,7 +271,7 @@ export default [
 	// misses the other.
 	{
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
 		}
 	},
 	// The write ban rides on top of the shared entries rather than replacing them: a second config
@@ -210,7 +281,17 @@ export default [
 	{
 		files: ['src/**/*.mts'],
 		rules: {
-			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...DISABLED_NO_WRITE]
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE, ...DISABLED_NO_WRITE]
+		}
+	},
+	// The itemCategory exemption rides on top of everything above rather than replacing it: a config
+	// object naming the same rule discards the previous options for every file it matches, so dropping
+	// either spread would silently un-ban the Sentry selectors and the `disabled*` write ban inside the
+	// one file this narrows.
+	{
+		files: ['src/lib/item/holdItemCategory.mts'],
+		rules: {
+			'no-restricted-syntax': ['error', ...RESTRICTED_SYNTAX, ...DISABLED_NO_WRITE, ...ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD]
 		}
 	}
 ]
