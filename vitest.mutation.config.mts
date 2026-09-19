@@ -26,6 +26,9 @@ export default defineConfig({
 	test: {
 		include: ['test/*.test.mts'],
 		server: { deps: { inline: inlineDeps } },
+		// Caps how long a test's full name may be — the mutation gate selects tests by name, and past a
+		// size it cannot; see vitest.testNames.mts.
+		setupFiles: ['./vitest.testNames.mts'],
 		// Not present in the `unit` project of vitest.config.mts (which relies on the 5s
 		// default) — added here only as a safety margin, since Stryker re-runs the suite
 		// once per mutant through its own instrumentation and that adds overhead the plain
