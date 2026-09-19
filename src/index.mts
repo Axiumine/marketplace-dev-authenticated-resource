@@ -239,9 +239,16 @@ export async function createServer() {
 			ctx.body = healthResponse()
 			ctx.status = 200
 			return
-		} else {
-			await next()
 		}
+		// No final `else { await next() }`: this is the last app.use() in the stack (nothing is
+		// registered after this middleware below, and the file has no other app.use() call) —
+		// checked directly above. Calling next() here would only resolve Koa's own no-op "end of
+		// the middleware chain" promise, so it cannot change ctx.status or ctx.body on any reachable
+		// path — there is no downstream middleware left to run that could set them, and neither
+		// branch above sets them either. That made the block an unkillable BlockStatement mutant
+		// (`{ await next() } -> {}`) under Stryker; deleting the dead call removes the mutant rather
+		// than papering over it with a directive. Same shape, and the same reason, as
+		// marketplace-dev-admin-authenticated-resource.
 	})
 
 	/****************
@@ -347,6 +354,10 @@ export async function start() {
 }
 
 /* v8 ignore start -- entrypoint wiring: executes only as the real process, never under test (NODE_ENV=test) */
+// Stryker disable all: same guard as the v8 ignore above, same reason. Both vitest.config.mts projects
+// (unit AND integration) set NODE_ENV=test, so this condition is false in every test run this repo has —
+// there is no reachable input, under any test config, on which a mutant inside this block could be
+// observed to behave differently. Restored below the closing brace so the rest of the file stays mutated.
 if (process.env.NODE_ENV !== 'test') {
 	// Handle unhandled promise rejections / uncaught exceptions
 	process.on('unhandledRejection', onUnhandledRejection)
@@ -376,4 +387,5 @@ if (process.env.NODE_ENV !== 'test') {
 			process.exit(1)
 		})
 }
+// Stryker restore all
 /* v8 ignore stop */

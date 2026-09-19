@@ -131,7 +131,7 @@ describe('a scanner that answers something this cannot read', () => {
 })
 
 describe('a scanner that is connected but will not answer', () => {
-	it('reports the failure to Sentry and carries on', async () => {
+	it('reports the failure to Sentry and to the console, and carries on', async () => {
 		const boom = new Error('socket hang up')
 
 		const report = await reportClamSignatureAge(
@@ -148,6 +148,12 @@ describe('a scanner that is connected but will not answer', () => {
 			extra: { detail: 'clamd is connected but did not report its version, so the signature age is unknown' }
 		})
 		expect(captureMessage).not.toHaveBeenCalled()
+		// ⚠️ The text, not the call count. Sentry needs a DSN to carry this anywhere, so on a machine
+		// without one the console line is the only trace a hung scanner leaves — an empty warn is a
+		// silent boot, and only asserting what it says can tell the two apart.
+		expect(console.warn).toHaveBeenCalledExactlyOnceWith(
+			'[clamav] clamd is connected but did not report its version, so the signature age is unknown'
+		)
 	})
 
 	/*

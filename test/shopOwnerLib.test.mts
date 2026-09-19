@@ -80,9 +80,18 @@ function mockStamp(matchedCount: number) {
 	updateOne.mockReturnValueOnce(sessioned({ exec: vi.fn().mockResolvedValue({ matchedCount, modifiedCount: 0 }) }))
 }
 
-/** The failure path's re-read: `findById().select().session().lean()`, answering the document or `null`. */
+/**
+ * The failure path's re-read: `findById().select().session().lean()`, answering the document or `null`.
+ *
+ * The `select` spy is handed back rather than kept private, so a test can assert the *projection* this
+ * re-read asks for and not only that it happened.
+ */
 function mockReRead(doc: unknown) {
-	findById.mockReturnValueOnce({ select: vi.fn(() => sessioned({ lean: vi.fn().mockResolvedValue(doc) })) })
+	const select = vi.fn(() => sessioned({ lean: vi.fn().mockResolvedValue(doc) }))
+
+	findById.mockReturnValueOnce({ select })
+
+	return select
 }
 
 /** The storefront cascade's three queries, armed with the companies the owner holds. */
@@ -252,11 +261,19 @@ describe('funShopOwnerDel', () => {
 	// outside it, it could answer from a snapshot the stamp has already moved past.
 	it('re-reads the account inside the transaction to tell the two refusals apart', async () => {
 		mockStamp(0)
-		mockReRead({ _id })
+		const select = mockReRead({ _id })
 
 		await expect(funShopOwnerDel(_id)).rejects.toThrow()
 
 		expect(findById).toHaveBeenCalledExactlyOnceWith(_id)
+		/*
+		 * ⚠️ The projection, not only the call. All this re-read has to decide is `null` or not-null, and a
+		 * ShopOwner document carries CSFLE-encrypted PII — asking for the whole document drags every one of
+		 * those fields back through the driver's decryption path to answer a question that needs no field at
+		 * all. Nothing downstream reads a second field, so only this assertion can notice the projection
+		 * going away.
+		 */
+		expect(select).toHaveBeenCalledExactlyOnceWith('_id')
 		expect(threaded).toEqual([inSession, inSession])
 	})
 
