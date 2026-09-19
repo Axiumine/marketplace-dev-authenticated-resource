@@ -1,3 +1,5 @@
+import type { AddressInfo } from 'node:net'
+
 import type { EnvShape } from '@axiumine/marketplace-common/others/assertEnvShape'
 import http from 'http'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -15,6 +17,20 @@ const hGetAll = vi.fn()
 /** The NodeClam initClamScan() hands back — identity is all start() does with it, so it needs no behaviour. */
 const clamScanner = { getVersion: vi.fn() }
 
+/*
+ * Captured constructor/factory arguments for the three real, unmocked config objects createServer()
+ * builds: graphql-upload's limits, koa-bodyparser's options, and the options object handed to the
+ * Apollo/Koa integration. Every wrapper delegates to the real implementation — upload handling, body
+ * parsing and the Apollo request path all behave exactly as in production — they only additionally
+ * record what they were called with, so the option literals themselves have something asserting their
+ * exact value instead of merely being reached. Without that, a mutant that empties one of those
+ * objects is executed on every request and still changes nothing any test can see.
+ */
+const graphqlUploadOptions: unknown[] = []
+const bodyParserOptions: unknown[] = []
+const koaMiddlewareOptions: { context?: () => Promise<unknown> }[] = []
+const apolloServerOptions: { pluginCount: number | undefined; csrfPrevention: unknown }[] = []
+
 vi.mock('@sentry/node', () => ({ captureException, captureMessage }))
 // redisClient is imported transitively by the handler, and start() itself now reads one key off it:
 // the keygrip record, to prove REDIS_KEY names the namespace this platform was seeded into (ADR-034).
@@ -31,6 +47,60 @@ vi.mock('@axiumine/koa-utils/files/scanVirus', () => ({ initClamScan }))
 // that it is handed that daemon and awaited; what it does with the answer is its own suite's business.
 vi.mock('@lib/clam/reportClamSignatureAge.mjs', () => ({ reportClamSignatureAge }))
 vi.mock('@lib/db/disconnectAllDatabases.mjs', () => ({ disconnectAllDatabases }))
+vi.mock('graphql-upload/graphqlUploadKoa.mjs', async (importOriginal) => {
+	const actual = await importOriginal<{ default: (options: unknown) => unknown }>()
+	return {
+		default: (options: unknown) => {
+			graphqlUploadOptions.push(options)
+			return actual.default(options)
+		}
+	}
+})
+vi.mock('koa-bodyparser', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('koa-bodyparser')>()
+	return {
+		// koa-bodyparser mutates its `opts` argument in place (it sets detectJSON/onerror/
+		// returnRawBody directly on the object it was given), so the options object must be
+		// snapshotted with a shallow copy BEFORE calling through, or the recorded value would
+		// reflect koa-bodyparser's post-mutation state instead of what src/index.mts passed in.
+		default: (options: Parameters<typeof actual.default>[0]) => {
+			bodyParserOptions.push({ ...options })
+			return actual.default(options)
+		}
+	}
+})
+// Recording wrapper only: `koaMiddleware` is re-exported untouched apart from the push, because what
+// is under test is the options literal src/index.mts builds, not the integration's own behaviour.
+// Typed through `unknown[]` rather than `Parameters<>`: koaMiddleware is generic in its context type,
+// and naming that type here would fix the very thing the assertion is meant to read back.
+vi.mock('@as-integrations/koa', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@as-integrations/koa')>()
+	const real = actual.koaMiddleware as unknown as (...args: unknown[]) => unknown
+	return {
+		...actual,
+		koaMiddleware: (...args: unknown[]) => {
+			koaMiddlewareOptions.push(args[1] as { context?: () => Promise<unknown> })
+			return real(...args)
+		}
+	}
+})
+vi.mock('@apollo/server', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('@apollo/server')>()
+	class SpiedApolloServer extends actual.ApolloServer {
+		constructor(options: ConstructorParameters<typeof actual.ApolloServer>[0]) {
+			// ApolloServer's real constructor appends its own built-in plugins (landing page,
+			// usage reporting, ...) directly onto the `plugins` array it was given, so the count
+			// must be read BEFORE calling super() — reading it after would count Apollo's own
+			// plugins alongside ours. Referencing the constructor parameter before super() is
+			// fine; only `this` is off-limits until super() runs.
+			const pluginCount = options?.plugins?.length
+			const csrfPrevention = options?.csrfPrevention
+			super(options)
+			apolloServerOptions.push({ pluginCount, csrfPrevention })
+		}
+	}
+	return { ...actual, ApolloServer: SpiedApolloServer }
+})
 
 const {
 	ENDPOINT,
@@ -571,6 +641,168 @@ describe('start (success path)', () => {
 // can write a visitor's address to Redis, to a log line or to Sentry. Turning it on would silently
 // start trusting `X-Forwarded-For` and start producing real addresses everywhere `ctx.ip` is read.
 // A comment cannot prevent that; this test can, and it is the reason the setting is never assigned.
+/*
+ * ⚠️ createServer() assembled and then actually driven, over a real socket. It connects no
+ * datasource — start() does that, separately — so the whole stack can be listened on an ephemeral
+ * port and requested with `fetch`, with Redis mocked at the one seam the bearer gate reads
+ * (`hGetAll`, the same seam authorizationAuthenticatedResourceHandler.test.mts uses) and no cluster
+ * anywhere. Every other test in this file stops at the handles createServer() returns, which left
+ * the auth middleware, the upload/bodyparser wiring and all three routing arms reachable only from
+ * test/integration/index.itest.mts — a project Stryker never runs (see vitest.mutation.config.mts),
+ * so they were excluded from `mutate` by line range instead of tested.
+ */
+describe('createServer (real Koa/Apollo assembly, driven over a real socket)', () => {
+	// The bearer gate runs before any routing decision, so every request that expects to get past it
+	// carries a real access credential; `tier` is not decoration, because the handler refuses a
+	// session that does not carry `shopOwner` and the whole assembly would answer 403 instead.
+	const OID = '507f1f77bcf86cd799439011'
+	const AUTHENTICATED = { authorization: 'Bearer access:unit-test-token' }
+
+	let app: Awaited<ReturnType<typeof createServer>>['app']
+	let httpServer: Awaited<ReturnType<typeof createServer>>['httpServer']
+	let apolloServer: Awaited<ReturnType<typeof createServer>>['apolloServer']
+	let base: string
+
+	beforeEach(async () => {
+		graphqlUploadOptions.length = 0
+		bodyParserOptions.length = 0
+		koaMiddlewareOptions.length = 0
+		apolloServerOptions.length = 0
+		hGetAll
+			.mockReset()
+			.mockResolvedValue(Object.assign(Object.create(null), { _id: OID, email: 'oste@marketplace.test', tier: 'shopOwner' }))
+
+		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, shaped(k))
+		vi.stubEnv('REDIS_URL', 'redis://127.0.0.1:6379')
+
+		const server = await createServer()
+		app = server.app
+		httpServer = server.httpServer
+		apolloServer = server.apolloServer
+
+		await new Promise<void>((resolve) => httpServer.listen(0, resolve))
+		base = `http://127.0.0.1:${(httpServer.address() as AddressInfo).port}`
+	})
+
+	afterEach(async () => {
+		await apolloServer.stop()
+		await new Promise<void>((resolve) => httpServer.close(() => resolve()))
+		vi.unstubAllEnvs()
+	})
+
+	/*
+	 * The whole options object in each case, not a subset: `graphqlUploadKoa({})` (no size or file
+	 * cap at all — a 30MB limit and a 10-file limit replaced by graphql-upload's own defaults),
+	 * `bodyParserKoa({})` (every key dropped), an emptied `enableTypes`/`extendTypes.json` array or
+	 * any one of the three type strings blanked all still reach their real implementation, still
+	 * serve requests, and all still fail this exact match.
+	 */
+	it('caps uploads at 30MB and 10 files, and parses json/form/text bodies', () => {
+		expect(graphqlUploadOptions).toEqual([{ maxFileSize: 30000000, maxFiles: 10 }])
+		expect(bodyParserOptions).toEqual([
+			{
+				enableTypes: ['json', 'form', 'text'],
+				// Multipart requests are deliberately excluded here — graphqlUploadKoa handles
+				// those — so only 'application/json' extends the json type, nothing else.
+				extendTypes: { json: ['application/json'] }
+			}
+		])
+	})
+
+	// pluginCount asserts the drain plugin is still wired (an emptied `plugins` array would leave the
+	// httpServer undrained on shutdown); csrfPrevention: true is what keeps this endpoint refusing a
+	// simple, credentialed cross-site POST, asserted end to end two tests below.
+	it('hardens Apollo with the drain plugin and csrfPrevention', () => {
+		expect(apolloServerOptions).toEqual([{ pluginCount: 1, csrfPrevention: true }])
+	})
+
+	it('serves the assembled schema at ENDPOINT for an authenticated caller', async () => {
+		const res = await fetch(`${base}${ENDPOINT}`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', ...AUTHENTICATED },
+			body: JSON.stringify({ query: '{ __schema { queryType { name } mutationType { name } } }' })
+		})
+		const json = (await res.json()) as {
+			data?: { __schema: { queryType: { name: string }; mutationType: { name: string } } }
+		}
+
+		expect(res.status).toBe(200)
+		expect(json.data?.__schema).toEqual({ queryType: { name: 'QueriesApi' }, mutationType: { name: 'MutationsApi' } })
+	})
+
+	/*
+	 * ⚠️ The raw Koa `ctx`, not the integration's own empty default — read off the options object
+	 * rather than out of a resolver, because every resolver in this schema reaches Mongo before it
+	 * touches the context. What the options object shows is exactly what is at stake: the resolvers
+	 * scope their queries by `ctx.state.user._id`, which the auth middleware wrote onto this very
+	 * object, so a `context()` returning `undefined` — or an options literal emptied to `{}`, which
+	 * makes the integration supply its own `{}` instead — is a resolver with no caller identity.
+	 */
+	it('hands the Koa ctx of the request itself to Apollo as the resolver context', async () => {
+		const res = await fetch(`${base}${ENDPOINT}`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/json', ...AUTHENTICATED },
+			body: JSON.stringify({ query: '{ __typename }' })
+		})
+		await res.json()
+
+		expect(koaMiddlewareOptions).toHaveLength(1)
+		const context = koaMiddlewareOptions[0]?.context
+		expect(context).toBeTypeOf('function')
+
+		const ctx = (await context?.()) as { path: string; app: unknown; state: { user: { _id: string } } }
+		expect(ctx.path).toBe(ENDPOINT)
+		expect(ctx.app).toBe(app)
+		// And it is the ctx the auth middleware has already written to, not a bare one.
+		expect(ctx.state.user._id.toString()).toBe(OID)
+	})
+
+	/*
+	 * Apollo's CSRF prevention treats `application/x-www-form-urlencoded` as suspicious unless a
+	 * non-empty `x-apollo-operation-name` (or `apollo-require-preflight`) header is present. With
+	 * `csrfPrevention: false` this request would instead reach runHttpQuery and fail on a different,
+	 * later check.
+	 */
+	it('blocks a form-encoded POST with no preflight header as a potential CSRF attempt', async () => {
+		const res = await fetch(`${base}${ENDPOINT}`, {
+			method: 'POST',
+			headers: { 'content-type': 'application/x-www-form-urlencoded', ...AUTHENTICATED },
+			body: 'query=' + encodeURIComponent('{ __typename }')
+		})
+		const json = (await res.json()) as { errors?: { message: string }[] }
+
+		expect(res.status).toBe(400)
+		expect(json.errors?.[0]?.message).toContain('potential Cross-Site Request Forgery')
+	})
+
+	it('serves /health once the bearer gate is satisfied', async () => {
+		const res = await fetch(`${base}/health`, { headers: AUTHENTICATED })
+		const json = (await res.json()) as { status: string; timestamp: string }
+
+		expect(res.status).toBe(200)
+		expect(json.status).toBe('OK')
+		expect(new Date(json.timestamp).toISOString()).toBe(json.timestamp)
+	})
+
+	// Nothing is mounted after the router, so an unknown path ends in Koa's own 404 — which is the
+	// point: it must not be answered by either of the two arms above.
+	it('falls through to 404 for an unknown path', async () => {
+		const res = await fetch(`${base}/nope`, { headers: AUTHENTICATED })
+
+		expect(res.status).toBe(404)
+	})
+
+	// No credential at all: the bearer gate runs before the ENDPOINT/health/else routing decision, so
+	// every path answers the same 412 — including /health, which a routing-only test would miss.
+	it('rejects a request that carries no bearer credential at all', async () => {
+		const res = await fetch(`${base}/health`)
+		const json = (await res.json()) as { message?: string }
+
+		expect(res.status).toBe(412)
+		expect(json.message).toBe('Precondition Failed')
+	})
+})
+
 describe('app.proxy', () => {
 	it('is off on the constructed Koa app', async () => {
 		for (const k of REQUIRED_ENV_VARS) vi.stubEnv(k, shaped(k))

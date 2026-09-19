@@ -60,39 +60,28 @@ export default {
 	 */
 	ignorePatterns: ['.qodana', 'coverage'],
 	mutate: [
-		'src/**/*.mts',
+		'src/**/*.mts'
 
-		// index.mts: split, not dropped wholesale. Unlike a file only reachable through the
-		// integration project, most of this one IS unit-tested directly — verified against
-		// test/index.unit.test.mts, which drives checkRequiredEnv, buildValidationRules,
-		// healthResponse, logListening, gracefulShutdown, onUnhandledRejection,
-		// onUncaughtException and start()'s three failure paths with every datasource mocked.
-		// Only two ranges are excluded, each for a distinct, verified reason:
-		'!src/index.mts',
+		// ⚠️ index.mts is mutated in full, and that is a deliberate change of policy. It used to be
+		// excluded wholesale and re-included as two hand-written LINE RANGES, because createServer()'s
+		// body — the bearer gate, the upload and bodyparser wiring, all three routing arms — was
+		// reachable only from test/integration/index.itest.mts, a project Stryker never runs (see the
+		// header of vitest.mutation.config.mts). It is not any more: test/index.unit.test.mts now boots
+		// the assembled server on an ephemeral port and drives ENDPOINT, /health, an unknown path and an
+		// uncredentialed request over a real socket, with Redis mocked at the one seam the gate reads. The
+		// unit project alone covers every statement, branch and function of this file.
 		//
-		// ⚠️ These are LINE NUMBERS, and they do not move when the file does. Adding anything above
-		// createServer() slides its body into a range marked "in scope", and the mutants that land
-		// there have no unit test to kill them — the run drops off 100 with survivors nobody
-		// introduced. That is exactly what ADR-029's `await setupFieldEncryption()` did. Re-derive
-		// all three boundaries from the source whenever src/index.mts changes length.
+		// The ranges had meanwhile rotted exactly as their own warning said they would — ADR-029's
+		// `await setupFieldEncryption()` is named in that warning, and the same thing happened again: the
+		// file grew and nobody re-derived the boundaries, so spans drifted in and out of scope while the
+		// score stayed at 100 and said nothing. A line range is only ever as good as the last person who
+		// remembered to move it; a span that really is unreachable from the unit project should fail the
+		// run as NoCoverage, not disappear from it.
 		//
-		// Lines 1-117: imports through onUncaughtException. Fully reachable from the unit
-		// project — kept in scope.
-		'src/index.mts:1-117',
-		// Lines 118-192 (createServer(), not re-included below): none of the start()
-		// failure-path tests reach it — each rejects before start() calls it (MongoDB/Redis/ClamAV
-		// mocks are rejected first). Only test/integration/index.itest.mts calls it, by
-		// booting the real server, and this run deliberately excludes that project (see the
-		// header of vitest.mutation.config.mts). Mutating it here would only produce
-		// NoCoverage noise, not signal.
-		// Lines 193-249: start()'s JSDoc plus the whole function body, whose Promise.all/try/catch
-		// IS exercised by the failure-path tests above — kept in scope.
-		'src/index.mts:193-249'
-		// Lines 250-269 (the `if (process.env.NODE_ENV !== 'test')` entrypoint tail, not
-		// re-included): already marked `/* v8 ignore start/stop */` in the source because it
-		// cannot run under the test process without killing the worker via process.exit.
-		// Every function it wires is tested directly above; the wiring itself has no branch
-		// a mutant could meaningfully flip under NODE_ENV=test.
+		// The one genuinely unreachable span — the `if (process.env.NODE_ENV !== 'test')` entrypoint tail
+		// — is carved out in the source instead, by a `// Stryker disable all` / `// Stryker restore all`
+		// pair around it, where it moves with the code it guards. Same shape, and the same reason, as
+		// marketplace-dev-admin-authenticated-resource.
 
 		// instrument.mts is NOT excluded. Static mutants are back in scope (see above), so its
 		// only module-load statement (`Sentry.init(...)`) is now a live mutated statement, not
