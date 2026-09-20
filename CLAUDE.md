@@ -17,6 +17,8 @@ Tier/concern split, port table, terminology, auth model live there. Not here.
 a "quick check on one file" is a reason to run it, nor is `npx stryker run` direct. To reproduce a
 survivor, apply the mutant by hand in the source and run `yarn test`, which takes seconds. Why:
 [`REPO.md`](./REPO.md).
+⚠️ Since ADR-055 the script has a second caller, `.github/workflows/gates.yml`, which runs it on
+every pull request — two callers, both automated, and a hand is neither.
 
 ## Rules
 
