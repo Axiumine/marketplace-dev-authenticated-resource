@@ -57,7 +57,12 @@ vi.mock('graphql-upload/graphqlUploadKoa.mjs', async (importOriginal) => {
 	}
 })
 vi.mock('koa-bodyparser', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('koa-bodyparser')>()
+	// `@types/koa-bodyparser` declares `export =`, so `typeof import('koa-bodyparser')` is the bare
+	// callable at the type level, with no `.default` — but importOriginal(), like a real dynamic
+	// `import()` of a CommonJS module, hands back a namespace object whose `.default` is that callable.
+	// Stating that actual runtime shape explicitly (as the graphql-upload mock above already does)
+	// keeps the call below typed correctly instead of asserting through a shape that has no `.default`.
+	const actual = await importOriginal<{ default: typeof import('koa-bodyparser') }>()
 	return {
 		// koa-bodyparser mutates its `opts` argument in place (it sets detectJSON/onerror/
 		// returnRawBody directly on the object it was given), so the options object must be
@@ -331,7 +336,7 @@ describe('checkRequiredEnv', () => {
 	 * a variable they have not written yet goes looking for a line that is not in the file.
 	 */
 	it('reports a missing variable before a misshapen one', () => {
-		const env = { ...validEnv(), REDIS_URL: SHAPED.redisUrl, PORT: MISSHAPEN.port }
+		const env: Record<string, string> = { ...validEnv(), REDIS_URL: SHAPED.redisUrl, PORT: MISSHAPEN.port }
 		delete env.MONGODB_URI
 
 		expect(() => checkRequiredEnv(env)).toThrow('Missing required environment variable: MONGODB_URI')

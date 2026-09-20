@@ -1,4 +1,6 @@
+import { IFileUpload } from '@axiumine/koa-utils/koa/IFileUpload'
 import { trusted, Types } from 'mongoose'
+import { Readable } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const companyFind = vi.fn()
@@ -135,8 +137,17 @@ beforeEach(() => {
 })
 
 describe('storeItemImage', () => {
+	// storeItemImage forwards this untouched to uploadTempImage, mocked above, so the stream is never
+	// actually read here — only the shape has to satisfy IFileUpload.
+	const fakeUpload = (filename: string): IFileUpload => ({
+		createReadStream: () => Readable.from([]),
+		filename,
+		mimetype: 'image/jpeg',
+		encoding: '7bit'
+	})
+
 	// What graphql-upload hands a resolver — a promise, not the stream — forwarded untouched.
-	const upload = Promise.resolve({ filename: 'shoe.JPG' })
+	const upload = Promise.resolve(fakeUpload('shoe.JPG'))
 
 	// ⚠️ Two names out of one id, and the difference between them is load-bearing: the document stores
 	// `fileName`, while `moveFileStaticDomain` takes `destBaseName`, because the move re-appends the temp

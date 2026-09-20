@@ -1,4 +1,4 @@
-import { getIntrospectionQuery, graphql, GraphQLSchema } from 'graphql'
+import { getIntrospectionQuery, graphql, GraphQLObjectType, GraphQLSchema } from 'graphql'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 // The resolvers pull the models in transitively; nothing connects, but the Redis client is
@@ -59,7 +59,11 @@ function typeOfField(typeName: string, fieldName: string): string {
 
 /** The rendered type of one argument — the only place a list's own nullability is readable. */
 function typeOfArg(root: 'QueriesApi' | 'MutationsApi', fieldName: string, argName: string): string {
-	const type = schema.getType(root) as { getFields(): Record<string, { args: Array<{ name: string; type: unknown }> }> }
+	// Query/Mutation roots are always object types — unlike typeOfField's typeName, which also takes
+	// input types, `root` never needs anything getFields() gives an input type, so a real instanceof
+	// check narrows this properly instead of asserting through a shape GraphQLUnionType does not have.
+	const type = schema.getType(root)
+	if (!(type instanceof GraphQLObjectType)) throw new Error(`${root} is not an object type`)
 
 	return String(type.getFields()[fieldName].args.find((a) => a.name === argName)?.type)
 }

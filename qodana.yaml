@@ -163,8 +163,15 @@ failureConditions:
 # nothing. That went unnoticed because the scan had no severity gate and exited 0
 # while printing the findings.
 #
-# Scoped to test/integration/, not disabled globally: if a genuinely shortenable
+# Scoped to test/, not disabled globally: if a genuinely shortenable
 # import ever appears in src/, it must still be reported.
+#
+# Widened from test/integration/ to test/ on 2026-09-20: the type-check gate's test-file
+# fixes surfaced the identical false positive outside test/integration/ too —
+# shopOwnerResolverHarness.mts, authorizationAuthenticatedResourceHandler.test.mts,
+# makeAuthCtx.test.mts, queries.test.mts and endEverySession.test.mts all import their
+# entry point the same explicit way, and Node ESM's directory-import restriction applies
+# to every test file here, not only the integration ones.
 exclude:
   - name: HardcodedPasswords
     paths:
@@ -172,7 +179,7 @@ exclude:
 
   - name: ES6PreferShortImport
     paths:
-      - test/integration
+      - test
 
 #Execute shell command before Qodana execution (Applied in CI/CD pipeline)
 #bootstrap: sh ./prepare-qodana.sh
