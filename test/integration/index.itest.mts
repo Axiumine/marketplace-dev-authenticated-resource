@@ -87,6 +87,26 @@ const seededShopOwners: mongoose.Types.ObjectId[] = []
 const seededKeys: string[] = []
 
 /**
+ * An 11-digit VAT number derived from an id, digits only, unlike the raw hex slice this replaces.
+ *
+ * ⚠️ `SHAPE_VAT_NUMBER` now runs on `companyAdd`'s real validate layer, so a value carrying `a`-`f` is
+ * refused with a 400 before it ever reaches the index this file's duplicate-key test is about.
+ *
+ * ⚠️ **A per-character `% 10` map was tried first and it collided.** `ObjectId`'s middle bytes are a
+ * random value fixed once per process, so every id this suite mints shares the same hex digits there —
+ * only the low-order counter varies, one integer step at a time — and mapping each hex digit to a
+ * decimal one independently throws bits away (`'a'` and `'0'` both land on `0`), which is exactly the
+ * information a `+1` counter step needs to stay visible. A single `BigInt` conversion of the whole id
+ * does not have that problem: incrementing the id by one increments this number by one, so consecutive
+ * ids almost never share their last 11 decimal digits — the collision would have to be a carry landing
+ * on all eleven at once. `padStart` covers the (practically unreachable) case of a decimal value short
+ * enough to need it.
+ */
+function vatNumberOf(id: mongoose.Types.ObjectId): string {
+	return BigInt(`0x${id.toHexString()}`).toString().slice(-11).padStart(11, '0')
+}
+
+/**
  * The legal seat. GeoJSON order: [longitude, latitude]. Plain JS numbers, not Decimal128.
  */
 const ADDRESS_SEED = {
@@ -123,7 +143,7 @@ async function seedCompany(idShopOwner: mongoose.Types.ObjectId) {
 					_id,
 					idShopOwner,
 					legalName,
-					vatNumber: _id.toHexString().slice(-11),
+					vatNumber: vatNumberOf(_id),
 					contactPerson: 'Itest ContactPerson',
 					administrator: 'Itest Administrator',
 					certifiedEmail: `itest-${_id.toHexString()}@certifiedEmail.invalid`,
@@ -439,7 +459,7 @@ describe('companyDel (soft delete against the real collection)', () => {
 	it('leaves the VAT number registered, so the same one cannot be added again', async () => {
 		const session = await withSession()
 		const company = await seedCompany(session._id)
-		const vatNumber = company._id.toHexString().slice(-11)
+		const vatNumber = vatNumberOf(company._id)
 
 		try {
 			await gql(`mutation { companyDel(_id: "${company._id.toHexString()}") }`, session.headers)

@@ -118,16 +118,19 @@ describe('process-level error handlers', () => {
 		exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => undefined) as never)
 	})
 
-	it('exits 1 on an unhandled rejection', () => {
+	// Neither handler can `await`: Node calls them synchronously, so the real Sentry.flush() this
+	// exercises against no DSN settles in the background and process.exit() only runs from its
+	// `.finally()` — `vi.waitFor` is what makes that asynchronous exit observable instead of racing it.
+	it('exits 1 on an unhandled rejection', async () => {
 		onUnhandledRejection(new Error('itest unhandled rejection'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 
-	it('exits 1 on an uncaught exception', () => {
+	it('exits 1 on an uncaught exception', async () => {
 		onUncaughtException(new Error('itest uncaught exception'))
 
-		expect(exitSpy).toHaveBeenCalledWith(1)
+		await vi.waitFor(() => expect(exitSpy).toHaveBeenCalledWith(1))
 	})
 })
 

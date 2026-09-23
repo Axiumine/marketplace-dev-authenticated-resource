@@ -1,6 +1,6 @@
 import { GraphQLError } from 'graphql'
 import { Types } from 'mongoose'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { driverError, ID_COMPANY, run, SHOP_OWNER_ID } from './shopOwnerResolverHarness.mts'
 
@@ -18,6 +18,7 @@ const funItemDelete = vi.fn()
 const storeItemImage = vi.fn()
 const moveFileStaticDomain = vi.fn()
 const holdItemCategory = vi.fn()
+const holdCompany = vi.fn()
 
 /**
  * The session both writing mutations open, and the transaction they run inside it.
@@ -51,6 +52,7 @@ vi.mock('@lib/item/throwIfShopOwnerDontOwnItem.mjs', () => ({ throwIfShopOwnerDo
 vi.mock('@lib/item/throwIfShopOwnerDontOwnAllItems.mjs', () => ({ throwIfShopOwnerDontOwnAllItems }))
 vi.mock('@lib/item/throwIfItemCategoryMissing.mjs', () => ({ throwIfItemCategoryMissing }))
 vi.mock('@lib/item/holdItemCategory.mjs', () => ({ holdItemCategory }))
+vi.mock('@lib/company/holdCompany.mjs', () => ({ holdCompany }))
 // Only `startSession` is replaced. `Types.ObjectId` is used by the resolvers under test and by this file
 // itself, so a wholly synthetic mongoose would take it away.
 vi.mock('mongoose', async (importOriginal) => {
@@ -77,6 +79,7 @@ const { itemDel } = await import('../src/graphQLApi/schema/mutations/itemDel.mts
 const idCategory = new Types.ObjectId('507f1f77bcf86cd799439030')
 const itemId = new Types.ObjectId('507f1f77bcf86cd799439020')
 const otherItemId = new Types.ObjectId('507f1f77bcf86cd799439021')
+const idOtherCompany = new Types.ObjectId('507f1f77bcf86cd799439016')
 
 // No `published`: it left `GraphQLInputItem` when publishing became its own mutation, so a client that
 // still sent it would be rejected by GraphQL before any of this ran.
@@ -113,11 +116,15 @@ beforeEach(() => {
 	// What it answers is deliberately not what the resolver returns — see the test below.
 	itemCreate.mockResolvedValue([{ _id: itemId }])
 	holdItemCategory.mockResolvedValue(undefined)
+	holdCompany.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
 	throwIfShopOwnerDontOwnAllItems.mockResolvedValue(undefined)
 	throwIfItemCategoryMissing.mockResolvedValue(undefined)
-	funItemUpdate.mockResolvedValue(undefined)
+	// The item stayed exactly where it was and never had a picture — the ordinary save, and the one
+	// case every test below gets unless it says otherwise. `idCompany` matches `item.idCompany`, so
+	// `itemUpdate`'s own idCompany comparison finds nothing to relocate.
+	funItemUpdate.mockResolvedValue({ idCompany: ID_COMPANY, image: undefined })
 	funItemUpdatePublished.mockResolvedValue(undefined)
 	funItemsUpdatePublished.mockResolvedValue(undefined)
 	funItemDelete.mockResolvedValue(undefined)
@@ -349,27 +356,46 @@ describe('itemAdd', () => {
 describe('itemUpdate', () => {
 	const args = { _id: itemId, item }
 
-	// ⚠️ Three guards, because a save is also potentially a transfer: `idCompany` is part of the input,
+	afterEach(() => vi.unstubAllEnvs())
+
+	// ⚠️ Four guards, because a save is also potentially a transfer: `idCompany` is part of the input,
 	// so the source and the destination are two different companies and both have to belong to the
-	// session. Dropping either half leaves a real hole — the item guard alone lets an owner push their
-	// item into a stranger's shop, the company guard alone lets them pull a stranger's item into theirs.
-	it('checks the item, then the destination shop, then the category, and delegates the save', async () => {
+	// session, and both have to still be live by the time the save commits. Dropping any one leaves a
+	// real hole — the item guard alone lets an owner push their item into a stranger's shop, the company
+	// guard alone lets them pull a stranger's item into theirs, and the hold alone (without the
+	// pre-flight) would let the write name a company that was never the caller's at all.
+	it('checks the item, then the destination shop, then the category, then the destination company, and delegates the save', async () => {
 		await expect(run(itemUpdate, args)).resolves.toBe(true)
 
 		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
 		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
 		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
+		expect(holdCompany).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, session)
 		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, item, session)
 	})
 
+	// ⚠️ Validated before either guard runs: a malformed card is refused for its own shape alone, ahead
+	// of the round trips that check whether the item or the destination belong to the caller.
+	it('rejects a malformed item before checking ownership or writing', async () => {
+		await expect(run(itemUpdate, { _id: itemId, item: { ...item, slug: 'Not-Lowercase' } })).rejects.toMatchObject({
+			message: 'Bad Request',
+			extensions: { http: { status: 400 }, description: 'item.slug: lowercase letters, digits and single hyphens only' }
+		})
+		expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
+		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+		expect(startSession).not.toHaveBeenCalled()
+	})
+
 	// ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
-	// under a category an admin is retiring in the same instant has to collide with that delete rather
-	// than commit past it. The hold comes first: there is no point writing the item to find out.
-	it('holds the category and saves inside one transaction', async () => {
+	// under a category an admin is retiring, or re-points it at a company the owner is retiring, in the
+	// same instant has to collide with that delete rather than commit past it. Both holds come first:
+	// there is no point writing the item to find out.
+	it('holds the category and the destination company, then saves, inside one transaction', async () => {
 		await run(itemUpdate, args)
 
 		expect(withTransaction).toHaveBeenCalledOnce()
-		expect(funItemUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+		expect(holdCompany.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+		expect(funItemUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(holdCompany.mock.invocationCallOrder[0])
 	})
 
 	// Unlike `itemAdd` there is no upload to refuse ahead of, so the cheap pre-flight would be a second
@@ -395,12 +421,26 @@ describe('itemUpdate', () => {
 
 		await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
 		expect(holdItemCategory).not.toHaveBeenCalled()
+		expect(holdCompany).not.toHaveBeenCalled()
 		expect(funItemUpdate).not.toHaveBeenCalled()
 		expect(startSession).not.toHaveBeenCalled()
 	})
 
 	it('does not write when the category does not exist, or was retired under the save', async () => {
 		holdItemCategory.mockRejectedValueOnce(notFound())
+
+		await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
+		expect(holdCompany).not.toHaveBeenCalled()
+		expect(funItemUpdate).not.toHaveBeenCalled()
+	})
+
+	// ⚠️ B24: the narrow window `throwIfShopOwnerDontOwnCompany` cannot close on its own. The pre-flight
+	// ran outside the transaction and already found the destination live and the caller's; `holdCompany`
+	// asks the same question again with a write, inside it, so an owner who retires that very company
+	// with `companyDel` in between collides with this save instead of leaving the item re-pointed at a
+	// company that no longer exists.
+	it('does not write when the destination company was retired under the save', async () => {
+		holdCompany.mockRejectedValueOnce(notFound())
 
 		await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
 		expect(funItemUpdate).not.toHaveBeenCalled()
@@ -423,6 +463,74 @@ describe('itemUpdate', () => {
 
 		await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
 		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+	})
+
+	// ⚠️ B16: the whole reason `funItemUpdate` answers what the item held before this save. `idCompany`
+	// changed and the item carried a picture under the old one — `STATIC_FOLDER/item/<idCompany>/` is
+	// keyed on the company, so the file has to move or every card renders a broken image.
+	describe('relocating the picture on a transfer', () => {
+		const oldImage = '507f1f77bcf86cd799439020.webp'
+
+		beforeEach(() => vi.stubEnv('STATIC_FOLDER', '/srv/static'))
+
+		it('moves the picture from the old company’s directory to the new one', async () => {
+			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+
+			await run(itemUpdate, args)
+
+			expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
+				`/srv/static/item/${String(idOtherCompany)}/${oldImage}`,
+				'item',
+				String(ID_COMPANY),
+				String(itemId)
+			)
+		})
+
+		// The move runs after the transaction commits, not inside it — the same placement `itemAdd`
+		// gives its own move, and for the same reason: a `rename` is not undone by an abort.
+		it('moves the picture only once the transaction has committed', async () => {
+			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+			withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+				await work()
+				expect(moveFileStaticDomain).not.toHaveBeenCalled()
+			})
+
+			await run(itemUpdate, args)
+
+			expect(moveFileStaticDomain).toHaveBeenCalledOnce()
+		})
+
+		// The ordinary save: `idCompany` did not change, whatever picture the item carries stays exactly
+		// where it is.
+		it('does not move anything when idCompany did not change', async () => {
+			funItemUpdate.mockResolvedValueOnce({ idCompany: ID_COMPANY, image: oldImage })
+
+			await run(itemUpdate, args)
+
+			expect(moveFileStaticDomain).not.toHaveBeenCalled()
+		})
+
+		// A transfer with nothing to move: the item never had a picture, so there is no file under the
+		// old company's directory to relocate.
+		it('does not move anything when the item never had a picture', async () => {
+			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: undefined })
+
+			await run(itemUpdate, args)
+
+			expect(moveFileStaticDomain).not.toHaveBeenCalled()
+		})
+
+		// The residual case `itemAdd`'s own move failure leaves on record: the save has already
+		// committed, the client is told the call failed, and the item is left naming a file that is not
+		// where the card looks for it.
+		it('reports a 500 when the file cannot be relocated, and does not undo the save', async () => {
+			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+			const moveFailure = new Error('EXDEV: cross-device link not permitted')
+			moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
+
+			await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
+			expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
+		})
 	})
 })
 

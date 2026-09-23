@@ -11,6 +11,7 @@ import { IItemUpdate } from '@lib/item/funItemUpdate.mjs'
 import { holdItemCategory } from '@lib/item/holdItemCategory.mjs'
 import { storeItemImage } from '@lib/item/storeItemImage.mjs'
 import { throwIfItemCategoryMissing } from '@lib/item/throwIfItemCategoryMissing.mjs'
+import { validateItem } from '@lib/validate/validateItem.mjs'
 import { GraphQLError, GraphQLNonNull } from 'graphql'
 import mongoose, { Types } from 'mongoose'
 
@@ -27,7 +28,10 @@ interface IArgs {
 /**
  * Adds an item to one of the signed-in owner's shops.
  *
- * Two guards, in this order, and both are load-bearing. `throwIfShopOwnerDontOwnCompany` refuses an
+ * `validateItem` runs first, ahead of either guard: `name`, `description` and `slug` are checked for
+ * shape alone, so a 400 from it costs nothing and names no company or category that exists.
+ *
+ * Two guards after it, in this order, and both are load-bearing. `throwIfShopOwnerDontOwnCompany` refuses an
  * `idCompany` the session does not hold — without it, an owner could stock any shop on the platform,
  * because `idCompany` is a client-supplied id rather than something the session determines (an owner
  * may hold several companies, so it cannot be). `throwIfItemCategoryMissing` refuses a category that
@@ -94,12 +98,16 @@ export const itemAdd = {
 		item: { type: new GraphQLNonNull(GraphQLInputItem) }
 	},
 	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args.item.idCompany)
-		await throwIfItemCategoryMissing(args.item.idCategory)
-
 		// `image` is pulled out of the object rather than spread with the rest: what arrives under that
-		// key is a promise of a stream, and the document takes a file name.
+		// key is a promise of a stream, and the document takes a file name. Validated *and* normalised
+		// before either guard runs — a malformed name or slug is a 400 that costs nothing to answer,
+		// and it leaks no more about which companies or categories exist than the guards' own 403/404 do.
 		const { image, ...card } = args.item
+		const validated = validateItem(card)
+
+		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, validated.idCompany)
+		await throwIfItemCategoryMissing(validated.idCategory)
+
 		const _id = new Types.ObjectId()
 		const session = await mongoose.startSession()
 
@@ -116,13 +124,13 @@ export const itemAdd = {
 			// without the path, which is what the validator's optional `image` means.
 			const newItem: IItemSchema = {
 				_id,
-				...card,
+				...validated,
 				published: false,
 				image: stored?.fileName
 			}
 
 			await session.withTransaction(async () => {
-				await holdItemCategory(card.idCategory, session)
+				await holdItemCategory(validated.idCategory, session)
 
 				await Item.create([newItem], { session })
 			})
@@ -136,7 +144,7 @@ export const itemAdd = {
 				// ⚠️ `destBaseName`, never `fileName`: the move appends the temp file's own extension to
 				// whatever it is handed, so the second would land as `<_id>.webp.webp`. See
 				// `IStoredItemImage`.
-				await moveFileStaticDomain(stored.tempFile, 'item', String(card.idCompany), stored.destBaseName)
+				await moveFileStaticDomain(stored.tempFile, 'item', String(validated.idCompany), stored.destBaseName)
 			}
 
 			return { _id }
