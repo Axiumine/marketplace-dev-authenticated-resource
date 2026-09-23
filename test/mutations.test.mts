@@ -32,6 +32,9 @@ const { companyDel } = await import('../src/graphQLApi/schema/mutations/companyD
 const { companyUpdate } = await import('../src/graphQLApi/schema/mutations/companyUpdate.mts')
 const { companyUpdatePublished } = await import('../src/graphQLApi/schema/mutations/companyUpdatePublished.mts')
 const { shopOwnerDel } = await import('../src/graphQLApi/schema/mutations/shopOwnerDel.mts')
+// Not mocked: what companyAdd/companyUpdate hand `Company.create`/`funCompanyUpdate` is this function's
+// own output, and the field-level checks it runs are `validate.test.mts`'s job, not this file's.
+const { validateCompany } = await import('../src/lib/validate/validateCompany.mts')
 
 beforeEach(() => {
 	vi.clearAllMocks()
@@ -44,8 +47,29 @@ beforeEach(() => {
 	endEverySession.mockResolvedValue(undefined)
 })
 
+// A complete, already-valid company — every field `validateCompany` requires, already trimmed and
+// shaped so validation changes nothing observable except adding the GeoJSON `position.type`. The three
+// optional storefront fields (`publicName`, `slug`, `description`) and `taxCode`/`uniqueCode` are left
+// out on purpose: a company is a legal entity before it is a shop, and the same fixture doubles as the
+// unpublished-draft case every describe block below needs.
+const company = {
+	legalName: 'Test Boutique Ltd',
+	vatNumber: '01234567890',
+	contactPerson: 'Mark Rivers',
+	administrator: 'Mark Rivers',
+	certifiedEmail: 'certified@boutique.test',
+	address: {
+		street: '1 main street',
+		postalCode: '02109',
+		city: 'Boston',
+		province: 'MA',
+		position: { coordinates: [9.19, 45.46] }
+	},
+	registryExtract: 'registryExtract.pdf'
+}
+
 describe('companyAdd', () => {
-	const args = { company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
+	const args = { company }
 
 	// The owner comes from the session, never from the input. Unlike every other write here there is
 	// no ownership guard to run first — the company does not exist yet, so `idShopOwner` is what
@@ -54,9 +78,20 @@ describe('companyAdd', () => {
 		await expect(run(companyAdd, args)).resolves.toEqual({ _id: ID_COMPANY })
 
 		const [doc] = companyCreate.mock.calls[0]
-		expect(doc).toMatchObject({ idShopOwner: SHOP_OWNER_ID, ...args.company })
+		expect(doc).toMatchObject({ idShopOwner: SHOP_OWNER_ID, ...company })
 		expect(doc._id).toBeInstanceOf(Types.ObjectId)
 		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+	})
+
+	// Validated before the write: a malformed card must never reach `Company.create` at all, and the
+	// 400 `throwErrorWrongUserInput` raises has to come back as itself rather than the generic 500 a
+	// raw `$jsonSchema` rejection would have produced.
+	it('rejects a malformed company before creating anything', async () => {
+		await expect(run(companyAdd, { company: { ...company, vatNumber: '123' } })).rejects.toMatchObject({
+			message: 'Bad Request',
+			extensions: { http: { status: 400 }, description: 'company.vatNumber: the VAT number is 11 digits' }
+		})
+		expect(companyCreate).not.toHaveBeenCalled()
 	})
 
 	// `published` left `GraphQLInputCompany` when publishing became `companyUpdatePublished`, so the
@@ -96,13 +131,13 @@ describe('companyAdd', () => {
 })
 
 describe('companyUpdate', () => {
-	const args = { _id: ID_COMPANY, company: { legalName: 'Test Boutique Ltd', vatNumber: '01234567890' } }
+	const args = { _id: ID_COMPANY, company }
 
-	it('checks ownership then delegates the save and answers true', async () => {
+	it('checks ownership then delegates the validated save and answers true', async () => {
 		await expect(run(companyUpdate, args)).resolves.toBe(true)
 
 		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
-		expect(funCompanyUpdate).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID, args.company)
+		expect(funCompanyUpdate).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, SHOP_OWNER_ID, validateCompany(company))
 	})
 
 	// The guard runs *before* the write, so a company belonging to someone else is never touched —
@@ -115,6 +150,16 @@ describe('companyUpdate', () => {
 		await expect(run(companyUpdate, args)).rejects.toMatchObject({
 			message: 'Forbidden',
 			extensions: { http: { status: 403 } }
+		})
+		expect(funCompanyUpdate).not.toHaveBeenCalled()
+	})
+
+	// The guard already proved the caller owns this company, so a malformed card is still validated —
+	// and refused — ahead of the write, the same as a brand-new one.
+	it('rejects a malformed company before saving anything', async () => {
+		await expect(run(companyUpdate, { _id: ID_COMPANY, company: { ...company, slug: 'Not-Lowercase' } })).rejects.toMatchObject({
+			message: 'Bad Request',
+			extensions: { http: { status: 400 }, description: 'company.slug: lowercase letters, digits and single hyphens only' }
 		})
 		expect(funCompanyUpdate).not.toHaveBeenCalled()
 	})

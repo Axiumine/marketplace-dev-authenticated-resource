@@ -19,19 +19,32 @@ export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' 
 /**
  * Saves a company, scoped to its owner.
  *
- * `$set` with the whole object rather than `updateOne(..., data)`: the input is complete, so a field the
- * owner cleared has to be cleared in the document too, and a bare update would leave the stale value
- * behind for `taxCode` and `uniqueCode` — the two the client may omit.
+ * ⚠️ **Split into `$set` and `$unset` here, not written as one `$set: data`.** `data` comes from
+ * `validateCompany`, which hands back every key of `ICompanyUpdate` — including the five optional ones,
+ * `undefined` rather than absent when the owner cleared them (see its own header for why). A top-level
+ * `$set` only touches the keys the operand names: a value genuinely missing from it leaves whatever the
+ * document already held for that path untouched, which is how a cleared `taxCode` used to survive a
+ * save. Splitting on `undefined` here is what turns "the key came back empty" into the `$unset` that
+ * actually clears it, the same technique `funShopOwnerUpdateStatus` and `funItemCategoryUpdate` use for
+ * their own single optional field — this one just has five.
  *
  * `idShopOwner` is in the filter, not in the update. A company cannot change hands by saving its
  * card, and a filter that matched on `_id` alone would let one owner overwrite another's company.
  *
  * `deleted` is not in the filter and does not need to be: `throwIfShopOwnerDontOwnCompany` runs
  * ahead of every call and already refuses a retired company, and the field is outside `ICompanyUpdate`
- * so a `$set` of the whole object cannot clear it either.
+ * so a `$set`/`$unset` of it cannot clear it either.
  */
 export async function funCompanyUpdate(companyId: Types.ObjectId, shopOwnerId: Types.ObjectId, data: ICompanyUpdate) {
-	const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: data }).exec()
+	const set: Record<string, unknown> = {}
+	const unset: Record<string, 1> = {}
+
+	for (const [key, value] of Object.entries(data)) {
+		if (value === undefined) unset[key] = 1
+		else set[key] = value
+	}
+
+	const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: set, $unset: unset }).exec()
 
 	if (ret.matchedCount !== 1) {
 		throwInternalError()
