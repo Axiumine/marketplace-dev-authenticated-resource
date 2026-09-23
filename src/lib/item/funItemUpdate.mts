@@ -30,7 +30,17 @@ import { ClientSession, trusted, Types } from 'mongoose'
 export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'published' | 'image'>
 
 /**
- * Saves an item, scoped to the companies its owner holds.
+ * What the item held before this save — the two fields a company transfer has to know to relocate a
+ * picture, and nothing else: the rest of the stored card is about to be overwritten by the very save
+ * that reads this.
+ */
+export interface IItemUpdateBefore {
+	idCompany: Types.ObjectId
+	image: string | undefined
+}
+
+/**
+ * Saves an item, scoped to the companies its owner holds, and answers what it held before the save.
  *
  * `$set` with the whole object rather than a partial: the input is complete, so a field the owner
  * cleared has to be cleared in the document too.
@@ -52,31 +62,44 @@ export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'publish
  * Changing an item's picture is not this mutation's job either way. There is no replace path yet —
  * `itemAdd` is the only writer of the field — so this drops rather than diverts.
  *
+ * ⚠️ **The read ahead of the write is what lets the resolver relocate a picture after a transfer.** A
+ * card whose `idCompany` changes moves the item's picture on disk too — `STATIC_FOLDER/item/<idCompany>/`
+ * is keyed on it — and the *destination* is `data.idCompany`, already in the caller's hands, but the
+ * *source* is whatever the document held a moment ago, which only the document itself can answer. This
+ * reads it in the same transaction as the write, so the two describe one snapshot: a read taken outside
+ * the transaction could name a company the write has already left.
+ *
  * ⚠️ **The session is not optional, and the write is only half of what it carries.** The resolver opens
- * one transaction over `holdItemCategory` and this save, so that a save which files an item under a
- * category collides with an admin retiring that same category instead of committing past it. Both
- * queries here join it — the company read as much as the update, or the filter would be built from a
- * different snapshot than the write it scopes.
+ * one transaction over `holdItemCategory`, `holdCompany` and this save, so that a save which files an
+ * item under a category or a company collides with an admin retiring that category, or the owner
+ * retiring that company, instead of committing past it. Every query here joins it — the company-id read,
+ * the before-image read and the update alike — or each would be built from a different snapshot than the
+ * others.
  */
 export async function funItemUpdate(
 	itemId: Types.ObjectId,
 	shopOwnerId: Types.ObjectId,
 	data: IItemUpdate,
 	session: ClientSession
-) {
+): Promise<IItemUpdateBefore> {
+	const ownerScope = { _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId, session) }) }
+
+	const before = await Item.findOne(ownerScope, { idCompany: 1, image: 1 }).session(session).lean()
+
+	if (before === null) {
+		throwInternalError()
+	}
+
 	// A copy with the key removed, rather than a rest-destructure: the discarded half of
 	// `const { image, ...card } =` is a binding nothing reads, and `no-unused-vars` is an error here.
 	const card: Partial<IItemUpdate & { image?: unknown }> = { ...data }
 	delete card.image
 
-	const ret = await Item.updateOne(
-		{ _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId, session) }) },
-		{ $set: card }
-	)
-		.session(session)
-		.exec()
+	const ret = await Item.updateOne(ownerScope, { $set: card }).session(session).exec()
 
 	if (ret.matchedCount !== 1) {
 		throwInternalError()
 	}
+
+	return { idCompany: before.idCompany, image: before.image }
 }

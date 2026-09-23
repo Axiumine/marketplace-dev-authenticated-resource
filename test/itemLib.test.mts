@@ -4,6 +4,7 @@ import { Readable } from 'stream'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const companyFind = vi.fn()
+const itemFindOne = vi.fn()
 const itemUpdateOne = vi.fn()
 const itemUpdateMany = vi.fn()
 const itemCountDocuments = vi.fn()
@@ -17,7 +18,7 @@ vi.mock('@sentry/node', () => ({ captureException: vi.fn(), captureMessage: vi.f
 // against a real database three services away.
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({ Company: { find: companyFind } }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({
-	Item: { updateOne: itemUpdateOne, updateMany: itemUpdateMany, countDocuments: itemCountDocuments }
+	Item: { findOne: itemFindOne, updateOne: itemUpdateOne, updateMany: itemUpdateMany, countDocuments: itemCountDocuments }
 }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/ItemCategory', () => ({
 	ItemCategory: { countDocuments: itemCategoryCountDocuments, findOneAndUpdate: itemCategoryFindOneAndUpdate }
@@ -125,6 +126,7 @@ const data = {
 
 beforeEach(() => {
 	companyFind.mockReset().mockReturnValue(finding([{ _id: idCompany }, { _id: idOtherCompany }]))
+	itemFindOne.mockReset().mockReturnValue(holding({ idCompany, image: undefined }))
 	itemUpdateOne.mockReset().mockReturnValue(updating())
 	itemUpdateMany.mockReset().mockReturnValue(updatingMany())
 	updateExec.mockReset().mockResolvedValue({ matchedCount: 1 })
@@ -392,6 +394,18 @@ describe('holdItemCategory', () => {
 })
 
 describe('funItemUpdate', () => {
+	/**
+	 * The one filter both queries this function makes are scoped by — `_id` plus the owner's live
+	 * companies — asserted on the exact key set for the reason `expectOwnerScopedWrite` is: a dropped
+	 * `idCompany` clause makes the read or the write succeed against every shop on the platform instead
+	 * of failing anything.
+	 */
+	function expectOwnerScopedFilter(filter: Record<string, unknown>) {
+		expect(filter._id).toBe(itemId)
+		expect(filter.idCompany).toEqual(trusted({ $in: [idCompany, idOtherCompany] }))
+		expect(Object.keys(filter).sort()).toEqual(['_id', 'idCompany'])
+	}
+
 	// ⚠️ The `idCompany` clause reads the STORED item, not the update — defence in depth behind
 	// `throwIfShopOwnerDontOwnItem`, refusing the write a second time if the item moved out from under
 	// the session in between. The destination in `data` is the resolver's to check: a filter cannot
@@ -399,26 +413,58 @@ describe('funItemUpdate', () => {
 	// The `$set` is asserted whole, which is also what pins `published` out of it: a save writes the
 	// card and leaves the publish flag exactly where the owner or an admin last put it.
 	it('saves the whole item, scoped to the companies its owner holds', async () => {
-		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toBeUndefined()
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toEqual({ idCompany, image: undefined })
 
 		expect(expectOwnerScopedWrite()).toEqual({ $set: data })
 	})
 
-	// ⚠️ Both queries join the session, not just the write. The filter is built from
-	// `shopOwnerCompanyIds`, so a company read taken outside the transaction would scope the update by a
-	// different snapshot than the one the update commits in.
-	it('runs the company read and the write in the caller’s transaction', async () => {
+	// The read that answers what the item held is scoped exactly like the write — same filter, same
+	// owner's companies — so the two describe one document rather than two different ones.
+	it('reads the item’s previous idCompany and image with the same owner-scoped filter as the write', async () => {
 		await funItemUpdate(itemId, shopOwnerId, data, session)
 
-		expect(threaded).toEqual([session, session])
+		expect(itemFindOne).toHaveBeenCalledOnce()
+		const [filter, projection] = itemFindOne.mock.calls[0]
+		expectOwnerScopedFilter(filter)
+		expect(projection).toEqual({ idCompany: 1, image: 1 })
 	})
 
-	// `matchedCount`, not `modifiedCount`: saving an item unchanged matches one document and modifies
-	// none, and that is a successful save — reading the other counter would 500 on every no-op.
-	it('accepts a save that changed nothing', async () => {
-		updateExec.mockResolvedValueOnce({ matchedCount: 1, modifiedCount: 0 })
+	// ⚠️ All three queries join the session, not just the write. The filter is built from
+	// `shopOwnerCompanyIds`, so a company read taken outside the transaction would scope the before-read
+	// and the update by a different snapshot than the one the update commits in.
+	it('runs the company read, the before-read and the write in the caller’s transaction', async () => {
+		await funItemUpdate(itemId, shopOwnerId, data, session)
 
-		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toBeUndefined()
+		expect(threaded).toEqual([session, session, session])
+	})
+
+	// The before-read runs ahead of the write: reading what a document holds after overwriting it would
+	// answer the write's own new values instead of what the resolver needs to compare against them.
+	it('reads the item before writing it', async () => {
+		await funItemUpdate(itemId, shopOwnerId, data, session)
+
+		expect(itemFindOne.mock.invocationCallOrder[0]).toBeLessThan(itemUpdateOne.mock.invocationCallOrder[0])
+	})
+
+	// Whatever the document held before this save, handed back exactly as read — a picture relocation
+	// is the resolver's decision, made by comparing this against the destination it already holds.
+	it('answers the previous idCompany and image untouched', async () => {
+		itemFindOne.mockReturnValueOnce(holding({ idCompany: idOtherCompany, image: '507f1f77bcf86cd799439020.webp' }))
+
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).resolves.toEqual({
+			idCompany: idOtherCompany,
+			image: '507f1f77bcf86cd799439020.webp'
+		})
+	})
+
+	// Nothing to relocate and nothing stale to compare against: the guard upstream has already refused
+	// an id that never matched the owner's companies, so a miss here means the item moved out from under
+	// the session between that guard and this read — the same 500 the write's own miss answers.
+	it('raises a 500 when the before-read matches nothing', async () => {
+		itemFindOne.mockReturnValueOnce(holding(null))
+
+		await expect(funItemUpdate(itemId, shopOwnerId, data, session)).rejects.toThrow('Internal Server Error')
+		expect(itemUpdateOne).not.toHaveBeenCalled()
 	})
 
 	it('raises a 500 when the filter matched nothing', async () => {
@@ -439,7 +485,7 @@ describe('funItemUpdate', () => {
 	it('never writes an image, whatever the client sent under that key', async () => {
 		const withUpload = { ...(data as object), image: Promise.resolve({ filename: 'shoe.jpg' }) } as never
 
-		await expect(funItemUpdate(itemId, shopOwnerId, withUpload, session)).resolves.toBeUndefined()
+		await expect(funItemUpdate(itemId, shopOwnerId, withUpload, session)).resolves.toEqual({ idCompany, image: undefined })
 
 		expect(expectOwnerScopedWrite()).toEqual({ $set: data })
 	})
