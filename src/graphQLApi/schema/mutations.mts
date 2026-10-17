@@ -12,19 +12,19 @@ import { itemUpdatePublished } from './mutations/itemUpdatePublished.mjs'
 import { shopOwnerDel } from './mutations/shopOwnerDel.mjs'
 
 const MutationsApi = new GraphQLObjectType({
-	name: 'MutationsApi',
-	fields: {
-		companyAdd,
-		companyDel,
-		companyUpdate,
-		companyUpdatePublished,
-		itemAdd,
-		itemDel,
-		itemUpdate,
-		itemUpdatePublished,
-		itemsUpdatePublished,
-		shopOwnerDel
-	}
+  name: 'MutationsApi',
+  fields: {
+    companyAdd,
+    companyDel,
+    companyUpdate,
+    companyUpdatePublished,
+    itemAdd,
+    itemDel,
+    itemUpdate,
+    itemUpdatePublished,
+    itemsUpdatePublished,
+    shopOwnerDel
+  }
 })
 
 export default MutationsApi

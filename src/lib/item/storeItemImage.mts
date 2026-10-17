@@ -4,19 +4,19 @@ import { Types } from 'mongoose'
 
 /** A picture that has passed validation and is waiting in the temp directory to be filed. */
 export interface IStoredItemImage {
-	/** Where `uploadTempImage` left the re-encoded file — a temp path, not the final one. */
-	tempFile: string
-	/** The name the file will carry under `STATIC_FOLDER/item/<idCompany>/`, and the value stored on the item. */
-	fileName: string
-	/**
-	 * The same name **without its extension**, and the only thing `moveFileStaticDomain` may be handed.
-	 *
-	 * ⚠️ It re-appends one. `moveTempFile`, underneath it, computes `path.extname(sourceFilePath)` from
-	 * the temp file and joins `${destFilename}${ext}` — so passing `fileName` there lands the picture on
-	 * disk as `<_id>.webp.webp`, while the document says `<_id>.webp` and every card renders a 404. The
-	 * two names exist separately for that reason, and neither call site gets to build the other's.
-	 */
-	destBaseName: string
+  /** Where `uploadTempImage` left the re-encoded file — a temp path, not the final one. */
+  tempFile: string
+  /** The name the file will carry under `STATIC_FOLDER/item/<idCompany>/`, and the value stored on the item. */
+  fileName: string
+  /**
+   * The same name **without its extension**, and the only thing `moveFileStaticDomain` may be handed.
+   *
+   * ⚠️ It re-appends one. `moveTempFile`, underneath it, computes `path.extname(sourceFilePath)` from
+   * the temp file and joins `${destFilename}${ext}` — so passing `fileName` there lands the picture on
+   * disk as `<_id>.webp.webp`, while the document says `<_id>.webp` and every card renders a 404. The
+   * two names exist separately for that reason, and neither call site gets to build the other's.
+   */
+  destBaseName: string
 }
 
 /**
@@ -42,8 +42,8 @@ export interface IStoredItemImage {
  * the document's name and the file's name are two derivations of one value instead of two guesses.
  */
 export async function storeItemImage(image: Promise<IFileUpload>, itemId: Types.ObjectId): Promise<IStoredItemImage> {
-	const { tempFile, ext } = await uploadTempImage(image)
-	const destBaseName = itemId.toHexString()
+  const { tempFile, ext } = await uploadTempImage(image)
+  const destBaseName = itemId.toHexString()
 
-	return { tempFile, fileName: `${destBaseName}.${ext}`, destBaseName }
+  return { tempFile, fileName: `${destBaseName}.${ext}`, destBaseName }
 }

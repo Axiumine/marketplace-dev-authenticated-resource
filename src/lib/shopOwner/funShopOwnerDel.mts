@@ -56,28 +56,28 @@ import mongoose, { trusted, Types } from 'mongoose'
  * two spellings existing.
  */
 export async function funShopOwnerDel(_id: Types.ObjectId) {
-	const session = await mongoose.startSession()
+  const session = await mongoose.startSession()
 
-	try {
-		await session.withTransaction(async () => {
-			const ret = await ShopOwner.updateOne(
-				{ _id: _id, deleted: trusted({ $exists: false }) },
-				{ $set: { deleted: new Date() } }
-			)
-				.session(session)
-				.exec()
+  try {
+    await session.withTransaction(async () => {
+      const ret = await ShopOwner.updateOne(
+        { _id: _id, deleted: trusted({ $exists: false }) },
+        { $set: { deleted: new Date() } }
+      )
+        .session(session)
+        .exec()
 
-			if (ret.matchedCount !== 1) {
-				const owner = await ShopOwner.findById(_id).select('_id').session(session).lean()
+      if (ret.matchedCount !== 1) {
+        const owner = await ShopOwner.findById(_id).select('_id').session(session).lean()
 
-				if (owner === null) throwUnauthorizedError()
+        if (owner === null) throwUnauthorizedError()
 
-				throwGoneError('account already closed')
-			}
+        throwGoneError('account already closed')
+      }
 
-			await unpublishOwnerStorefront(_id, session)
-		})
-	} finally {
-		await session.endSession()
-	}
+      await unpublishOwnerStorefront(_id, session)
+    })
+  } finally {
+    await session.endSession()
+  }
 }

@@ -6,8 +6,8 @@ import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLNonNull } from 'graphql
 import { Types } from 'mongoose'
 
 interface IArgs {
-	_id: Types.ObjectId
-	published: boolean
+  _id: Types.ObjectId
+  published: boolean
 }
 
 /**
@@ -23,21 +23,21 @@ interface IArgs {
  * one call.
  */
 export const companyUpdatePublished = {
-	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'publishes or unpublishes a company',
-	args: {
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args._id)
+  type: new GraphQLNonNull(GraphQLBoolean),
+  description: 'publishes or unpublishes a company',
+  args: {
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    published: { type: new GraphQLNonNull(GraphQLBoolean) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args._id)
 
-		try {
-			await funCompanyUpdatePublished(args._id, ctx.state.user._id, args.published)
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		}
+    try {
+      await funCompanyUpdatePublished(args._id, ctx.state.user._id, args.published)
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    }
 
-		return true
-	}
+    return true
+  }
 }

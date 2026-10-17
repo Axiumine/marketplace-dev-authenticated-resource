@@ -15,13 +15,13 @@ import { trusted, Types } from 'mongoose'
  * casting it against the `deleted` path.
  */
 export async function throwIfShopOwnerDontOwnCompany(shopOwnerId: Types.ObjectId, companyId: Types.ObjectId) {
-	const found = await Company.countDocuments({
-		_id: companyId,
-		idShopOwner: shopOwnerId,
-		deleted: trusted({ $exists: false })
-	}).lean()
+  const found = await Company.countDocuments({
+    _id: companyId,
+    idShopOwner: shopOwnerId,
+    deleted: trusted({ $exists: false })
+  }).lean()
 
-	if (found === 0) {
-		throw throwForbiddenError()
-	}
+  if (found === 0) {
+    throw throwForbiddenError()
+  }
 }

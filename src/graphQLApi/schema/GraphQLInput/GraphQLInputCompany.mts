@@ -17,36 +17,36 @@ import { GraphQLInputObjectType, GraphQLNonNull, GraphQLString } from 'graphql'
  * in.
  */
 export const GraphQLInputCompany = new GraphQLInputObjectType({
-	name: 'GraphQLInputCompany',
-	fields: () => ({
-		legalName: { type: new GraphQLNonNull(GraphQLString) },
-		vatNumber: { type: new GraphQLNonNull(GraphQLString) },
-		taxCode: { type: GraphQLString },
-		contactPerson: { type: new GraphQLNonNull(GraphQLString) },
-		administrator: { type: new GraphQLNonNull(GraphQLString) },
-		uniqueCode: { type: GraphQLString },
-		certifiedEmail: { type: new GraphQLNonNull(GraphQLString) },
-		address: { type: new GraphQLNonNull(GraphQLInputCompanyAddress) },
-		registryExtract: { type: new GraphQLNonNull(GraphQLString) },
-		// The shop half. Mirrors `GraphQLCompany` field for field, because `funCompanyUpdate` `$set`s
-		// the whole object — a field missing from this input is a field the owner can never clear.
-		publicName: { type: GraphQLString },
-		slug: { type: GraphQLString },
-		description: { type: GraphQLString }
-	})
+  name: 'GraphQLInputCompany',
+  fields: () => ({
+    legalName: { type: new GraphQLNonNull(GraphQLString) },
+    vatNumber: { type: new GraphQLNonNull(GraphQLString) },
+    taxCode: { type: GraphQLString },
+    contactPerson: { type: new GraphQLNonNull(GraphQLString) },
+    administrator: { type: new GraphQLNonNull(GraphQLString) },
+    uniqueCode: { type: GraphQLString },
+    certifiedEmail: { type: new GraphQLNonNull(GraphQLString) },
+    address: { type: new GraphQLNonNull(GraphQLInputCompanyAddress) },
+    registryExtract: { type: new GraphQLNonNull(GraphQLString) },
+    // The shop half. Mirrors `GraphQLCompany` field for field, because `funCompanyUpdate` `$set`s
+    // the whole object — a field missing from this input is a field the owner can never clear.
+    publicName: { type: GraphQLString },
+    slug: { type: GraphQLString },
+    description: { type: GraphQLString }
+  })
 })
 
 const GraphQLInputCompanyAddress = new GraphQLInputObjectType({
-	name: 'GraphQLInputCompanyAddress',
-	fields: () => ({
-		...GraphQLAddressFrag,
-		position: { type: new GraphQLNonNull(GraphQLInputCompanyPosition) }
-	})
+  name: 'GraphQLInputCompanyAddress',
+  fields: () => ({
+    ...GraphQLAddressFrag,
+    position: { type: new GraphQLNonNull(GraphQLInputCompanyPosition) }
+  })
 })
 
 const GraphQLInputCompanyPosition = new GraphQLInputObjectType({
-	name: 'GraphQLInputCompanyPosition',
-	fields: () => ({
-		...GraphQLPositionFrag
-	})
+  name: 'GraphQLInputCompanyPosition',
+  fields: () => ({
+    ...GraphQLPositionFrag
+  })
 })

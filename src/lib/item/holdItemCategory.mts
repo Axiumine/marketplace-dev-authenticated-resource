@@ -39,15 +39,15 @@ import { ClientSession, trusted, Types } from 'mongoose'
  * inside the transaction, and not on any read path.
  */
 export async function holdItemCategory(idCategory: Types.ObjectId, session: ClientSession) {
-	const held = await ItemCategory.findOneAndUpdate(
-		{ _id: idCategory, deleted: trusted({ $exists: false }) },
-		{ $inc: { __v: 1 } },
-		{ projection: { _id: 1 } }
-	)
-		.session(session)
-		.lean()
+  const held = await ItemCategory.findOneAndUpdate(
+    { _id: idCategory, deleted: trusted({ $exists: false }) },
+    { $inc: { __v: 1 } },
+    { projection: { _id: 1 } }
+  )
+    .session(session)
+    .lean()
 
-	if (held === null) {
-		throwNotFoundError()
-	}
+  if (held === null) {
+    throwNotFoundError()
+  }
 }

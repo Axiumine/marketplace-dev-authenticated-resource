@@ -24,12 +24,12 @@ import { trusted, Types } from 'mongoose'
  * asked for, and a no-op is not an error.
  */
 export async function funItemUpdatePublished(itemId: Types.ObjectId, shopOwnerId: Types.ObjectId, published: boolean) {
-	const ret = await Item.updateOne(
-		{ _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
-		{ $set: { published } }
-	).exec()
+  const ret = await Item.updateOne(
+    { _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
+    { $set: { published } }
+  ).exec()
 
-	if (ret.matchedCount !== 1) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== 1) {
+    throwInternalError()
+  }
 }

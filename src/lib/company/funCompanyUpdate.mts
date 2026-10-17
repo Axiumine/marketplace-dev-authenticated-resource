@@ -36,17 +36,17 @@ export type ICompanyUpdate = Omit<ICompanySchema, '_id' | 'idShopOwner' | '__v' 
  * so a `$set`/`$unset` of it cannot clear it either.
  */
 export async function funCompanyUpdate(companyId: Types.ObjectId, shopOwnerId: Types.ObjectId, data: ICompanyUpdate) {
-	const set: Record<string, unknown> = {}
-	const unset: Record<string, 1> = {}
+  const set: Record<string, unknown> = {}
+  const unset: Record<string, 1> = {}
 
-	for (const [key, value] of Object.entries(data)) {
-		if (value === undefined) unset[key] = 1
-		else set[key] = value
-	}
+  for (const [key, value] of Object.entries(data)) {
+    if (value === undefined) unset[key] = 1
+    else set[key] = value
+  }
 
-	const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: set, $unset: unset }).exec()
+  const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: set, $unset: unset }).exec()
 
-	if (ret.matchedCount !== 1) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== 1) {
+    throwInternalError()
+  }
 }

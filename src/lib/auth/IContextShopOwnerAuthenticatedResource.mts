@@ -3,12 +3,12 @@ import { IRedisDataShopOwnerForNode } from '@axiumine/marketplace-common/others/
 import { IncomingHttpHeaders } from 'http'
 
 type IStateApi = {
-	user: IRedisDataShopOwnerForNode
+  user: IRedisDataShopOwnerForNode
 }
 export type IContextShopOwnerAuthenticatedResource = {
-	state: IStateApi
-	request: {
-		header?: TCommonHeaders & IncomingHttpHeaders
-	}
+  state: IStateApi
+  request: {
+    header?: TCommonHeaders & IncomingHttpHeaders
+  }
 }
 export {}

@@ -9,10 +9,10 @@ import { GraphQLID, GraphQLNonNull, GraphQLObjectType } from 'graphql'
  * the whole shape from one flat list without recursing.
  */
 export const GraphQLItemCategory = new GraphQLObjectType({
-	name: 'GraphQLItemCategory',
-	fields: () => ({
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		idParent: { type: GraphQLID },
-		...GraphQLItemCategoryFrag
-	})
+  name: 'GraphQLItemCategory',
+  fields: () => ({
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    idParent: { type: GraphQLID },
+    ...GraphQLItemCategoryFrag
+  })
 })

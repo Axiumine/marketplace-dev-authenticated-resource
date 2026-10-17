@@ -6,8 +6,8 @@ import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLNonNull } from 'graphql
 import { Types } from 'mongoose'
 
 interface IArgs {
-	_id: Types.ObjectId
-	published: boolean
+  _id: Types.ObjectId
+  published: boolean
 }
 
 /**
@@ -25,21 +25,21 @@ interface IArgs {
  * already rejected everything a validator would have.
  */
 export const itemUpdatePublished = {
-	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'publishes or unpublishes an item',
-	args: {
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		await throwIfShopOwnerDontOwnItem(ctx.state.user._id, args._id)
+  type: new GraphQLNonNull(GraphQLBoolean),
+  description: 'publishes or unpublishes an item',
+  args: {
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    published: { type: new GraphQLNonNull(GraphQLBoolean) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    await throwIfShopOwnerDontOwnItem(ctx.state.user._id, args._id)
 
-		try {
-			await funItemUpdatePublished(args._id, ctx.state.user._id, args.published)
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		}
+    try {
+      await funItemUpdatePublished(args._id, ctx.state.user._id, args.published)
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    }
 
-		return true
-	}
+    return true
+  }
 }

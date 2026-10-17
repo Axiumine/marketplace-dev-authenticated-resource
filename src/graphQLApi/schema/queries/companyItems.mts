@@ -6,7 +6,7 @@ import { GraphQLID, GraphQLList, GraphQLNonNull } from 'graphql'
 import { trusted, Types } from 'mongoose'
 
 interface IArgs {
-	idCompany: Types.ObjectId
+  idCompany: Types.ObjectId
 }
 
 /**
@@ -24,14 +24,14 @@ interface IArgs {
  * literal value and cast against the `deleted` path instead of being read as an admin.
  */
 export const companyItems = {
-	type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLItem))),
-	description: 'Get items of a company',
-	args: {
-		idCompany: { type: new GraphQLNonNull(GraphQLID) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args.idCompany)
+  type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLItem))),
+  description: 'Get items of a company',
+  args: {
+    idCompany: { type: new GraphQLNonNull(GraphQLID) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args.idCompany)
 
-		return Item.find({ idCompany: args.idCompany, deleted: trusted({ $exists: false }) }).lean()
-	}
+    return Item.find({ idCompany: args.idCompany, deleted: trusted({ $exists: false }) }).lean()
+  }
 }

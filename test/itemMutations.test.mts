@@ -31,16 +31,16 @@ const holdCompany = vi.fn()
  * mock has to be able to name `startSession`.
  */
 const { endSession, session, startSession, withTransaction } = vi.hoisted(() => {
-	const endSessionFn = vi.fn()
-	const withTransactionFn = vi.fn(async (work: () => Promise<void>) => await work())
-	const sessionObj = { withTransaction: withTransactionFn, endSession: endSessionFn }
+  const endSessionFn = vi.fn()
+  const withTransactionFn = vi.fn(async (work: () => Promise<void>) => await work())
+  const sessionObj = { withTransaction: withTransactionFn, endSession: endSessionFn }
 
-	return {
-		endSession: endSessionFn,
-		session: sessionObj,
-		startSession: vi.fn(async () => sessionObj),
-		withTransaction: withTransactionFn
-	}
+  return {
+    endSession: endSessionFn,
+    session: sessionObj,
+    startSession: vi.fn(async () => sessionObj),
+    withTransaction: withTransactionFn
+  }
 })
 
 // tryCatchRethrow is deliberately NOT mocked, as in `mutations.test.mts`: turning a driver error into
@@ -56,9 +56,9 @@ vi.mock('@lib/company/holdCompany.mjs', () => ({ holdCompany }))
 // Only `startSession` is replaced. `Types.ObjectId` is used by the resolvers under test and by this file
 // itself, so a wholly synthetic mongoose would take it away.
 vi.mock('mongoose', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('mongoose')>()
+  const actual = await importOriginal<typeof import('mongoose')>()
 
-	return { ...actual, default: { ...actual.default, startSession } }
+  return { ...actual, default: { ...actual.default, startSession } }
 })
 vi.mock('@lib/item/funItemUpdate.mjs', () => ({ funItemUpdate }))
 vi.mock('@lib/item/funItemUpdatePublished.mjs', () => ({ funItemUpdatePublished }))
@@ -84,11 +84,11 @@ const idOtherCompany = new Types.ObjectId('507f1f77bcf86cd799439016')
 // No `published`: it left `GraphQLInputItem` when publishing became its own mutation, so a client that
 // still sent it would be rejected by GraphQL before any of this ran.
 const item = {
-	idCompany: ID_COMPANY,
-	idCategory,
-	name: 'Sneaker',
-	description: 'Baked this morning',
-	slug: 'sneaker'
+  idCompany: ID_COMPANY,
+  idCategory,
+  name: 'Sneaker',
+  description: 'Baked this morning',
+  slug: 'sneaker'
 }
 
 // What `graphql-upload` hands a resolver: a promise, never the stream itself. Its contents are never
@@ -100,9 +100,9 @@ const upload = Promise.resolve({ filename: 'shoe.jpg' })
 // document stores `fileName`, and `moveFileStaticDomain` is handed `destBaseName`, because the move
 // re-appends the temp file's own extension to whatever it is given.
 const stored = {
-	tempFile: '/tmp/upload/2a1d.webp',
-	fileName: '507f1f77bcf86cd799439020.webp',
-	destBaseName: '507f1f77bcf86cd799439020'
+  tempFile: '/tmp/upload/2a1d.webp',
+  fileName: '507f1f77bcf86cd799439020.webp',
+  destBaseName: '507f1f77bcf86cd799439020'
 }
 
 // The shapes the two mocked guards really raise: `throwForbiddenError` names the status, while every
@@ -111,639 +111,639 @@ const forbidden = () => new GraphQLError('Forbidden', { extensions: { http: { st
 const notFound = () => new GraphQLError('Oops', { extensions: { http: { status: 404 } } })
 
 beforeEach(() => {
-	vi.clearAllMocks()
-	// The array form, because that is the only one that carries options and the session has to be one.
-	// What it answers is deliberately not what the resolver returns — see the test below.
-	itemCreate.mockResolvedValue([{ _id: itemId }])
-	holdItemCategory.mockResolvedValue(undefined)
-	holdCompany.mockResolvedValue(undefined)
-	throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
-	throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
-	throwIfShopOwnerDontOwnAllItems.mockResolvedValue(undefined)
-	throwIfItemCategoryMissing.mockResolvedValue(undefined)
-	// The item stayed exactly where it was and never had a picture — the ordinary save, and the one
-	// case every test below gets unless it says otherwise. `idCompany` matches `item.idCompany`, so
-	// `itemUpdate`'s own idCompany comparison finds nothing to relocate.
-	funItemUpdate.mockResolvedValue({ idCompany: ID_COMPANY, image: undefined })
-	funItemUpdatePublished.mockResolvedValue(undefined)
-	funItemsUpdatePublished.mockResolvedValue(undefined)
-	funItemDelete.mockResolvedValue(undefined)
-	storeItemImage.mockResolvedValue(stored)
-	moveFileStaticDomain.mockResolvedValue(undefined)
+  vi.clearAllMocks()
+  // The array form, because that is the only one that carries options and the session has to be one.
+  // What it answers is deliberately not what the resolver returns — see the test below.
+  itemCreate.mockResolvedValue([{ _id: itemId }])
+  holdItemCategory.mockResolvedValue(undefined)
+  holdCompany.mockResolvedValue(undefined)
+  throwIfShopOwnerDontOwnCompany.mockResolvedValue(undefined)
+  throwIfShopOwnerDontOwnItem.mockResolvedValue(undefined)
+  throwIfShopOwnerDontOwnAllItems.mockResolvedValue(undefined)
+  throwIfItemCategoryMissing.mockResolvedValue(undefined)
+  // The item stayed exactly where it was and never had a picture — the ordinary save, and the one
+  // case every test below gets unless it says otherwise. `idCompany` matches `item.idCompany`, so
+  // `itemUpdate`'s own idCompany comparison finds nothing to relocate.
+  funItemUpdate.mockResolvedValue({ idCompany: ID_COMPANY, image: undefined })
+  funItemUpdatePublished.mockResolvedValue(undefined)
+  funItemsUpdatePublished.mockResolvedValue(undefined)
+  funItemDelete.mockResolvedValue(undefined)
+  storeItemImage.mockResolvedValue(stored)
+  moveFileStaticDomain.mockResolvedValue(undefined)
 })
 
 describe('itemAdd', () => {
-	// `idCompany` is client-supplied — it has to be, an owner may hold several shops — so the ownership
-	// guard is the only thing between this mutation and stocking a stranger's shop.
-	it('checks the shop then the category, and creates the item with a fresh _id', async () => {
-		const created = (await run(itemAdd, { item })) as { _id: Types.ObjectId }
+  // `idCompany` is client-supplied — it has to be, an owner may hold several shops — so the ownership
+  // guard is the only thing between this mutation and stocking a stranger's shop.
+  it('checks the shop then the category, and creates the item with a fresh _id', async () => {
+    const created = (await run(itemAdd, { item })) as { _id: Types.ObjectId }
 
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
-		expect(throwIfItemCategoryMissing).toHaveBeenCalledExactlyOnceWith(idCategory)
+    expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
+    expect(throwIfItemCategoryMissing).toHaveBeenCalledExactlyOnceWith(idCategory)
 
-		const [[doc], options] = itemCreate.mock.calls[0]
-		expect(doc).toMatchObject(item)
-		expect(doc._id).toBeInstanceOf(Types.ObjectId)
-		expect(options).toEqual({ session })
+    const [[doc], options] = itemCreate.mock.calls[0]
+    expect(doc).toMatchObject(item)
+    expect(doc._id).toBeInstanceOf(Types.ObjectId)
+    expect(options).toEqual({ session })
 
-		// The answer is the id this resolver minted, not whatever `create` echoed back — the array form
-		// answers an array, and the id is a value the resolver already holds.
-		expect(created._id).toBe(doc._id)
-	})
+    // The answer is the id this resolver minted, not whatever `create` echoed back — the array form
+    // answers an array, and the id is a value the resolver already holds.
+    expect(created._id).toBe(doc._id)
+  })
 
-	// ⚠️ The second half of the cross-service rule `funItemCategoryDelete` enforces on 4024: that delete
-	// refuses to retire a category while a live item points at it, and it counts those items in its own
-	// transaction. An insert that does not touch the category commits straight past that count — snapshot
-	// isolation permits the write skew — and leaves an item filed under a category no read path returns.
-	// `holdItemCategory` writes the category, so the two collide and one of them is retried.
-	it('holds the category inside the transaction that carries the insert', async () => {
-		await run(itemAdd, { item })
+  // ⚠️ The second half of the cross-service rule `funItemCategoryDelete` enforces on 4024: that delete
+  // refuses to retire a category while a live item points at it, and it counts those items in its own
+  // transaction. An insert that does not touch the category commits straight past that count — snapshot
+  // isolation permits the write skew — and leaves an item filed under a category no read path returns.
+  // `holdItemCategory` writes the category, so the two collide and one of them is retried.
+  it('holds the category inside the transaction that carries the insert', async () => {
+    await run(itemAdd, { item })
 
-		expect(withTransaction).toHaveBeenCalledOnce()
-		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
-		expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
-	})
+    expect(withTransaction).toHaveBeenCalledOnce()
+    expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
+    expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+  })
 
-	// The category can be retired between the cheap pre-flight and the insert — that window is the whole
-	// reason the hold exists — and the answer is the same 404 the pre-flight gives.
-	it('does not write when the category was retired between the check and the insert', async () => {
-		holdItemCategory.mockRejectedValueOnce(notFound())
+  // The category can be retired between the cheap pre-flight and the insert — that window is the whole
+  // reason the hold exists — and the answer is the same 404 the pre-flight gives.
+  it('does not write when the category was retired between the check and the insert', async () => {
+    holdItemCategory.mockRejectedValueOnce(notFound())
 
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
-			extensions: { http: { status: 404 } }
-		})
-		expect(itemCreate).not.toHaveBeenCalled()
-		expect(moveFileStaticDomain).not.toHaveBeenCalled()
-	})
+    await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
+      extensions: { http: { status: 404 } }
+    })
+    expect(itemCreate).not.toHaveBeenCalled()
+    expect(moveFileStaticDomain).not.toHaveBeenCalled()
+  })
 
-	// ⚠️ `withTransaction` re-runs its callback on a `WriteConflict`, so anything inside it can happen
-	// twice — which is why neither the scan nor the move is. The upload runs once, ahead of the
-	// transaction, and the retry writes the same document rather than minting a second `_id` that would
-	// no longer match the file already named after the first.
-	it('scans the upload once, and re-uses the minted _id when the transaction is retried', async () => {
-		withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
-			await work()
-			await work()
-		})
+  // ⚠️ `withTransaction` re-runs its callback on a `WriteConflict`, so anything inside it can happen
+  // twice — which is why neither the scan nor the move is. The upload runs once, ahead of the
+  // transaction, and the retry writes the same document rather than minting a second `_id` that would
+  // no longer match the file already named after the first.
+  it('scans the upload once, and re-uses the minted _id when the transaction is retried', async () => {
+    withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+      await work()
+      await work()
+    })
 
-		await run(itemAdd, { item: { ...item, image: upload } })
+    await run(itemAdd, { item: { ...item, image: upload } })
 
-		const [[first]] = itemCreate.mock.calls[0]
-		const [[second]] = itemCreate.mock.calls[1]
-		expect(second._id).toBe(first._id)
-		expect(storeItemImage).toHaveBeenCalledOnce()
-		expect(moveFileStaticDomain).toHaveBeenCalledOnce()
-	})
+    const [[first]] = itemCreate.mock.calls[0]
+    const [[second]] = itemCreate.mock.calls[1]
+    expect(second._id).toBe(first._id)
+    expect(storeItemImage).toHaveBeenCalledOnce()
+    expect(moveFileStaticDomain).toHaveBeenCalledOnce()
+  })
 
-	// The other half of the same rule, from inside: by the time the transaction opens the file is already
-	// scanned and re-encoded, and nothing has been published. A `rename` is not undone by an abort.
-	it('leaves the scan behind it and the move ahead of it when the transaction opens', async () => {
-		withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
-			expect(storeItemImage).toHaveBeenCalledOnce()
-			expect(moveFileStaticDomain).not.toHaveBeenCalled()
+  // The other half of the same rule, from inside: by the time the transaction opens the file is already
+  // scanned and re-encoded, and nothing has been published. A `rename` is not undone by an abort.
+  it('leaves the scan behind it and the move ahead of it when the transaction opens', async () => {
+    withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+      expect(storeItemImage).toHaveBeenCalledOnce()
+      expect(moveFileStaticDomain).not.toHaveBeenCalled()
 
-			await work()
-		})
+      await work()
+    })
 
-		await run(itemAdd, { item: { ...item, image: upload } })
+    await run(itemAdd, { item: { ...item, image: upload } })
 
-		expect(moveFileStaticDomain).toHaveBeenCalledOnce()
-	})
+    expect(moveFileStaticDomain).toHaveBeenCalledOnce()
+  })
 
-	// The client cannot send the flag, so the resolver has to write one — `published` is `required` on
-	// the collection and the insert fails without it. `false` and not `true`: a new item is a draft until
-	// its owner publishes it on purpose, which is the whole point of the split.
-	it('stamps the new item as an unpublished draft', async () => {
-		await run(itemAdd, { item })
+  // The client cannot send the flag, so the resolver has to write one — `published` is `required` on
+  // the collection and the insert fails without it. `false` and not `true`: a new item is a draft until
+  // its owner publishes it on purpose, which is the whole point of the split.
+  it('stamps the new item as an unpublished draft', async () => {
+    await run(itemAdd, { item })
 
-		const [[doc]] = itemCreate.mock.calls[0]
-		expect(doc.published).toBe(false)
-	})
+    const [[doc]] = itemCreate.mock.calls[0]
+    expect(doc.published).toBe(false)
+  })
 
-	// The common case, and the one that has to stay cheap: an item with no picture must not reach the
-	// upload machinery at all, and must be written without the path rather than with an empty one — the
-	// validator's `image` is optional, and a null there is not the same document as a missing key.
-	it('touches neither the temp directory nor the static domain when no picture was sent', async () => {
-		await run(itemAdd, { item })
+  // The common case, and the one that has to stay cheap: an item with no picture must not reach the
+  // upload machinery at all, and must be written without the path rather than with an empty one — the
+  // validator's `image` is optional, and a null there is not the same document as a missing key.
+  it('touches neither the temp directory nor the static domain when no picture was sent', async () => {
+    await run(itemAdd, { item })
 
-		expect(storeItemImage).not.toHaveBeenCalled()
-		expect(moveFileStaticDomain).not.toHaveBeenCalled()
+    expect(storeItemImage).not.toHaveBeenCalled()
+    expect(moveFileStaticDomain).not.toHaveBeenCalled()
 
-		const [[doc]] = itemCreate.mock.calls[0]
-		expect(doc.image).toBeUndefined()
-	})
+    const [[doc]] = itemCreate.mock.calls[0]
+    expect(doc.image).toBeUndefined()
+  })
 
-	// The three steps of `itemAdd`'s header, in the one order that leaves nothing orphaned: store the
-	// upload in the temp directory, write the document, and only then make the file publicly reachable.
-	// The upload is forwarded as it arrived — a promise, which is what graphql-upload hands a resolver —
-	// together with the `_id` the resolver has just minted, so the picture is named after the item
-	// rather than after whatever the client called its file.
-	it('stores the picture, writes the item, then publishes the file under the shop', async () => {
-		const created = (await run(itemAdd, { item: { ...item, image: upload } })) as { _id: Types.ObjectId }
+  // The three steps of `itemAdd`'s header, in the one order that leaves nothing orphaned: store the
+  // upload in the temp directory, write the document, and only then make the file publicly reachable.
+  // The upload is forwarded as it arrived — a promise, which is what graphql-upload hands a resolver —
+  // together with the `_id` the resolver has just minted, so the picture is named after the item
+  // rather than after whatever the client called its file.
+  it('stores the picture, writes the item, then publishes the file under the shop', async () => {
+    const created = (await run(itemAdd, { item: { ...item, image: upload } })) as { _id: Types.ObjectId }
 
-		const [[doc]] = itemCreate.mock.calls[0]
-		expect(created._id).toBe(doc._id)
-		expect(storeItemImage).toHaveBeenCalledExactlyOnceWith(upload, doc._id)
+    const [[doc]] = itemCreate.mock.calls[0]
+    expect(created._id).toBe(doc._id)
+    expect(storeItemImage).toHaveBeenCalledExactlyOnceWith(upload, doc._id)
 
-		// The document carries the file name and nothing else about the picture: not a path, not a URL,
-		// and not the `Upload` it came from — that key is pulled out of the object before mongoose sees it.
-		expect(doc.image).toBe(stored.fileName)
+    // The document carries the file name and nothing else about the picture: not a path, not a URL,
+    // and not the `Upload` it came from — that key is pulled out of the object before mongoose sees it.
+    expect(doc.image).toBe(stored.fileName)
 
-		// ⚠️ `destBaseName`, not `fileName`: `moveTempFile` under this call appends the temp file's own
-		// extension to what it is handed, so passing the name with `.webp` already on it would land the
-		// picture as `<_id>.webp.webp` while the document says `<_id>.webp`.
-		expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
-			stored.tempFile,
-			'item',
-			ID_COMPANY.toHexString(),
-			stored.destBaseName
-		)
+    // ⚠️ `destBaseName`, not `fileName`: `moveTempFile` under this call appends the temp file's own
+    // extension to what it is handed, so passing the name with `.webp` already on it would land the
+    // picture as `<_id>.webp.webp` while the document says `<_id>.webp`.
+    expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
+      stored.tempFile,
+      'item',
+      ID_COMPANY.toHexString(),
+      stored.destBaseName
+    )
 
-		expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(storeItemImage.mock.invocationCallOrder[0])
-		expect(moveFileStaticDomain.mock.invocationCallOrder[0]).toBeGreaterThan(itemCreate.mock.invocationCallOrder[0])
-	})
+    expect(itemCreate.mock.invocationCallOrder[0]).toBeGreaterThan(storeItemImage.mock.invocationCallOrder[0])
+    expect(moveFileStaticDomain.mock.invocationCallOrder[0]).toBeGreaterThan(itemCreate.mock.invocationCallOrder[0])
+  })
 
-	// Nothing publicly served may belong to an item that was never created. The slug collision is the
-	// ordinary way this insert fails, so it is the case worth pinning: the re-encoded file stays in the
-	// temp directory, where the operating system reclaims it and where no URL points.
-	it('leaves the picture in the temp directory when the insert fails', async () => {
-		itemCreate.mockRejectedValueOnce(
-			Object.assign(new Error('E11000 duplicate key error collection: item index: idCompany_slug_unique'), {
-				errorResponse: { code: 11000 }
-			})
-		)
+  // Nothing publicly served may belong to an item that was never created. The slug collision is the
+  // ordinary way this insert fails, so it is the case worth pinning: the re-encoded file stays in the
+  // temp directory, where the operating system reclaims it and where no URL points.
+  it('leaves the picture in the temp directory when the insert fails', async () => {
+    itemCreate.mockRejectedValueOnce(
+      Object.assign(new Error('E11000 duplicate key error collection: item index: idCompany_slug_unique'), {
+        errorResponse: { code: 11000 }
+      })
+    )
 
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
-			extensions: { http: { status: 409 } }
-		})
-		expect(moveFileStaticDomain).not.toHaveBeenCalled()
-	})
+    await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({
+      extensions: { http: { status: 409 } }
+    })
+    expect(moveFileStaticDomain).not.toHaveBeenCalled()
+  })
 
-	// The upload is inside the same try as the two writes, and this is what says so: a file that fails
-	// validation, the virus scan or the re-encode has to come back as the 500 tryCatchRethrow makes,
-	// with the cause in Sentry — not as a raw rejection Apollo renders on its own terms.
-	it('turns a rejected upload into a 500, without writing the item', async () => {
-		const uploadFailure = new Error('Error storing image')
-		storeItemImage.mockRejectedValueOnce(uploadFailure)
+  // The upload is inside the same try as the two writes, and this is what says so: a file that fails
+  // validation, the virus scan or the re-encode has to come back as the 500 tryCatchRethrow makes,
+  // with the cause in Sentry — not as a raw rejection Apollo renders on its own terms.
+  it('turns a rejected upload into a 500, without writing the item', async () => {
+    const uploadFailure = new Error('Error storing image')
+    storeItemImage.mockRejectedValueOnce(uploadFailure)
 
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
-		expect(itemCreate).not.toHaveBeenCalled()
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(uploadFailure)
-	})
+    await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
+    expect(itemCreate).not.toHaveBeenCalled()
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(uploadFailure)
+  })
 
-	// The residual case `itemAdd`'s header writes down and does not repair: the item exists, and the
-	// client is told the call failed. Asserted so that the behaviour is a decision on record rather than
-	// something a reader has to infer from where the try block happens to end.
-	it('reports a 500 when the file cannot be published, and does not undo the item', async () => {
-		const moveFailure = new Error('EXDEV: cross-device link not permitted')
-		moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
+  // The residual case `itemAdd`'s header writes down and does not repair: the item exists, and the
+  // client is told the call failed. Asserted so that the behaviour is a decision on record rather than
+  // something a reader has to infer from where the try block happens to end.
+  it('reports a 500 when the file cannot be published, and does not undo the item', async () => {
+    const moveFailure = new Error('EXDEV: cross-device link not permitted')
+    moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
 
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
-		expect(itemCreate).toHaveBeenCalledOnce()
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
-	})
+    await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toThrow('Internal Server Error')
+    expect(itemCreate).toHaveBeenCalledOnce()
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
+  })
 
-	// Ownership first, existence second, and the order is the assertion: a caller who does not own the
-	// shop must learn nothing about which category ids are real. The upload is behind both guards for a
-	// second reason — it writes a file, scans it and re-encodes it, so a refused request that still ran
-	// it would hand a stranger the expensive half of the mutation.
-	it('does not reach the category check, the upload or the write, for a shop that is not the caller’s', async () => {
-		throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
+  // Ownership first, existence second, and the order is the assertion: a caller who does not own the
+  // shop must learn nothing about which category ids are real. The upload is behind both guards for a
+  // second reason — it writes a file, scans it and re-encodes it, so a refused request that still ran
+  // it would hand a stranger the expensive half of the mutation.
+  it('does not reach the category check, the upload or the write, for a shop that is not the caller’s', async () => {
+    throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
-		expect(storeItemImage).not.toHaveBeenCalled()
-		expect(itemCreate).not.toHaveBeenCalled()
-		// The guards are ahead of the session too: a refused request must not open a transaction.
-		expect(startSession).not.toHaveBeenCalled()
-	})
+    await expect(run(itemAdd, { item: { ...item, image: upload } })).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+    expect(storeItemImage).not.toHaveBeenCalled()
+    expect(itemCreate).not.toHaveBeenCalled()
+    // The guards are ahead of the session too: a refused request must not open a transaction.
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	it('does not write when the category does not exist', async () => {
-		throwIfItemCategoryMissing.mockRejectedValueOnce(notFound())
+  it('does not write when the category does not exist', async () => {
+    throwIfItemCategoryMissing.mockRejectedValueOnce(notFound())
 
-		await expect(run(itemAdd, { item })).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
-		expect(itemCreate).not.toHaveBeenCalled()
-		expect(storeItemImage).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-	})
+    await expect(run(itemAdd, { item })).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
+    expect(itemCreate).not.toHaveBeenCalled()
+    expect(storeItemImage).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	// `{ idCompany, slug }` is unique, so a slug already used in this shop fails here — and has to reach
-	// the client as a 409 rather than the 500 every other write failure becomes. It is also the case the
-	// `return await` in the resolver exists for: without the await the rejection escapes the try and
-	// surfaces as an unhandled rejection instead.
-	it('turns a slug already taken in the same shop into a 409', async () => {
-		itemCreate.mockRejectedValueOnce(
-			Object.assign(new Error('E11000 duplicate key error collection: item index: idCompany_slug_unique'), {
-				errorResponse: { code: 11000 }
-			})
-		)
+  // `{ idCompany, slug }` is unique, so a slug already used in this shop fails here — and has to reach
+  // the client as a 409 rather than the 500 every other write failure becomes. It is also the case the
+  // `return await` in the resolver exists for: without the await the rejection escapes the try and
+  // surfaces as an unhandled rejection instead.
+  it('turns a slug already taken in the same shop into a 409', async () => {
+    itemCreate.mockRejectedValueOnce(
+      Object.assign(new Error('E11000 duplicate key error collection: item index: idCompany_slug_unique'), {
+        errorResponse: { code: 11000 }
+      })
+    )
 
-		await expect(run(itemAdd, { item })).rejects.toMatchObject({
-			message: 'Conflict',
-			extensions: { http: { status: 409 } }
-		})
-		expect(captureException).not.toHaveBeenCalled()
-	})
+    await expect(run(itemAdd, { item })).rejects.toMatchObject({
+      message: 'Conflict',
+      extensions: { http: { status: 409 } }
+    })
+    expect(captureException).not.toHaveBeenCalled()
+  })
 
-	it('turns a driver failure into a 500', async () => {
-		itemCreate.mockRejectedValueOnce(driverError)
+  it('turns a driver failure into a 500', async () => {
+    itemCreate.mockRejectedValueOnce(driverError)
 
-		await expect(run(itemAdd, { item })).rejects.toThrow('Internal Server Error')
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
-	})
+    await expect(run(itemAdd, { item })).rejects.toThrow('Internal Server Error')
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+  })
 })
 
 describe('itemUpdate', () => {
-	const args = { _id: itemId, item }
+  const args = { _id: itemId, item }
 
-	afterEach(() => vi.unstubAllEnvs())
+  afterEach(() => vi.unstubAllEnvs())
 
-	// ⚠️ Four guards, because a save is also potentially a transfer: `idCompany` is part of the input,
-	// so the source and the destination are two different companies and both have to belong to the
-	// session, and both have to still be live by the time the save commits. Dropping any one leaves a
-	// real hole — the item guard alone lets an owner push their item into a stranger's shop, the company
-	// guard alone lets them pull a stranger's item into theirs, and the hold alone (without the
-	// pre-flight) would let the write name a company that was never the caller's at all.
-	it('checks the item, then the destination shop, then the category, then the destination company, and delegates the save', async () => {
-		await expect(run(itemUpdate, args)).resolves.toBe(true)
+  // ⚠️ Four guards, because a save is also potentially a transfer: `idCompany` is part of the input,
+  // so the source and the destination are two different companies and both have to belong to the
+  // session, and both have to still be live by the time the save commits. Dropping any one leaves a
+  // real hole — the item guard alone lets an owner push their item into a stranger's shop, the company
+  // guard alone lets them pull a stranger's item into theirs, and the hold alone (without the
+  // pre-flight) would let the write name a company that was never the caller's at all.
+  it('checks the item, then the destination shop, then the category, then the destination company, and delegates the save', async () => {
+    await expect(run(itemUpdate, args)).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
-		expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
-		expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
-		expect(holdCompany).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, session)
-		expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, item, session)
-	})
+    expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
+    expect(throwIfShopOwnerDontOwnCompany).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, ID_COMPANY)
+    expect(holdItemCategory).toHaveBeenCalledExactlyOnceWith(idCategory, session)
+    expect(holdCompany).toHaveBeenCalledExactlyOnceWith(ID_COMPANY, session)
+    expect(funItemUpdate).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, item, session)
+  })
 
-	// ⚠️ Validated before either guard runs: a malformed card is refused for its own shape alone, ahead
-	// of the round trips that check whether the item or the destination belong to the caller.
-	it('rejects a malformed item before checking ownership or writing', async () => {
-		await expect(run(itemUpdate, { _id: itemId, item: { ...item, slug: 'Not-Lowercase' } })).rejects.toMatchObject({
-			message: 'Bad Request',
-			extensions: { http: { status: 400 }, description: 'item.slug: lowercase letters, digits and single hyphens only' }
-		})
-		expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
-		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-	})
+  // ⚠️ Validated before either guard runs: a malformed card is refused for its own shape alone, ahead
+  // of the round trips that check whether the item or the destination belong to the caller.
+  it('rejects a malformed item before checking ownership or writing', async () => {
+    await expect(run(itemUpdate, { _id: itemId, item: { ...item, slug: 'Not-Lowercase' } })).rejects.toMatchObject({
+      message: 'Bad Request',
+      extensions: { http: { status: 400 }, description: 'item.slug: lowercase letters, digits and single hyphens only' }
+    })
+    expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
+    expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	// ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
-	// under a category an admin is retiring, or re-points it at a company the owner is retiring, in the
-	// same instant has to collide with that delete rather than commit past it. Both holds come first:
-	// there is no point writing the item to find out.
-	it('holds the category and the destination company, then saves, inside one transaction', async () => {
-		await run(itemUpdate, args)
+  // ⚠️ The hold and the save are one transaction, and the save joins it — a save that re-files an item
+  // under a category an admin is retiring, or re-points it at a company the owner is retiring, in the
+  // same instant has to collide with that delete rather than commit past it. Both holds come first:
+  // there is no point writing the item to find out.
+  it('holds the category and the destination company, then saves, inside one transaction', async () => {
+    await run(itemUpdate, args)
 
-		expect(withTransaction).toHaveBeenCalledOnce()
-		expect(holdCompany.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
-		expect(funItemUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(holdCompany.mock.invocationCallOrder[0])
-	})
+    expect(withTransaction).toHaveBeenCalledOnce()
+    expect(holdCompany.mock.invocationCallOrder[0]).toBeGreaterThan(holdItemCategory.mock.invocationCallOrder[0])
+    expect(funItemUpdate.mock.invocationCallOrder[0]).toBeGreaterThan(holdCompany.mock.invocationCallOrder[0])
+  })
 
-	// Unlike `itemAdd` there is no upload to refuse ahead of, so the cheap pre-flight would be a second
-	// round trip buying nothing. The holding call is the only category check on this path.
-	it('does not ask the category question a second, cheaper time', async () => {
-		await run(itemUpdate, args)
+  // Unlike `itemAdd` there is no upload to refuse ahead of, so the cheap pre-flight would be a second
+  // round trip buying nothing. The holding call is the only category check on this path.
+  it('does not ask the category question a second, cheaper time', async () => {
+    await run(itemUpdate, args)
 
-		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
-	})
+    expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+  })
 
-	it('does not write, or check the destination, when the item is not the caller’s', async () => {
-		throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
+  it('does not write, or check the destination, when the item is not the caller’s', async () => {
+    throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
-		expect(funItemUpdate).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+    expect(funItemUpdate).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	// The transfer half: the caller owns the item and names a shop that is not theirs.
-	it('does not write when the destination shop is not the caller’s', async () => {
-		throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
+  // The transfer half: the caller owns the item and names a shop that is not theirs.
+  it('does not write when the destination shop is not the caller’s', async () => {
+    throwIfShopOwnerDontOwnCompany.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(holdItemCategory).not.toHaveBeenCalled()
-		expect(holdCompany).not.toHaveBeenCalled()
-		expect(funItemUpdate).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdate, args)).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(holdItemCategory).not.toHaveBeenCalled()
+    expect(holdCompany).not.toHaveBeenCalled()
+    expect(funItemUpdate).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	it('does not write when the category does not exist, or was retired under the save', async () => {
-		holdItemCategory.mockRejectedValueOnce(notFound())
+  it('does not write when the category does not exist, or was retired under the save', async () => {
+    holdItemCategory.mockRejectedValueOnce(notFound())
 
-		await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
-		expect(holdCompany).not.toHaveBeenCalled()
-		expect(funItemUpdate).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
+    expect(holdCompany).not.toHaveBeenCalled()
+    expect(funItemUpdate).not.toHaveBeenCalled()
+  })
 
-	// ⚠️ B24: the narrow window `throwIfShopOwnerDontOwnCompany` cannot close on its own. The pre-flight
-	// ran outside the transaction and already found the destination live and the caller's; `holdCompany`
-	// asks the same question again with a write, inside it, so an owner who retires that very company
-	// with `companyDel` in between collides with this save instead of leaving the item re-pointed at a
-	// company that no longer exists.
-	it('does not write when the destination company was retired under the save', async () => {
-		holdCompany.mockRejectedValueOnce(notFound())
+  // ⚠️ B24: the narrow window `throwIfShopOwnerDontOwnCompany` cannot close on its own. The pre-flight
+  // ran outside the transaction and already found the destination live and the caller's; `holdCompany`
+  // asks the same question again with a write, inside it, so an owner who retires that very company
+  // with `companyDel` in between collides with this save instead of leaving the item re-pointed at a
+  // company that no longer exists.
+  it('does not write when the destination company was retired under the save', async () => {
+    holdCompany.mockRejectedValueOnce(notFound())
 
-		await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
-		expect(funItemUpdate).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdate, args)).rejects.toMatchObject({ extensions: { http: { status: 404 } } })
+    expect(funItemUpdate).not.toHaveBeenCalled()
+  })
 
-	// A GraphQLError raised downstream of the guards keeps its status instead of being flattened to a
-	// 500 — that is the whole reason the catch goes through tryCatchRethrow.
-	it('keeps a downstream GraphQL error instead of flattening it', async () => {
-		funItemUpdate.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+  // A GraphQLError raised downstream of the guards keeps its status instead of being flattened to a
+  // 500 — that is the whole reason the catch goes through tryCatchRethrow.
+  it('keeps a downstream GraphQL error instead of flattening it', async () => {
+    funItemUpdate.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
 
-		await expect(run(itemUpdate, args)).rejects.toMatchObject({
-			message: 'Conflict',
-			extensions: { http: { status: 409 } }
-		})
-		expect(captureException).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdate, args)).rejects.toMatchObject({
+      message: 'Conflict',
+      extensions: { http: { status: 409 } }
+    })
+    expect(captureException).not.toHaveBeenCalled()
+  })
 
-	it('turns a driver failure into a 500', async () => {
-		funItemUpdate.mockRejectedValueOnce(driverError)
+  it('turns a driver failure into a 500', async () => {
+    funItemUpdate.mockRejectedValueOnce(driverError)
 
-		await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
-	})
+    await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+  })
 
-	// ⚠️ B16: the whole reason `funItemUpdate` answers what the item held before this save. `idCompany`
-	// changed and the item carried a picture under the old one — `STATIC_FOLDER/item/<idCompany>/` is
-	// keyed on the company, so the file has to move or every card renders a broken image.
-	describe('relocating the picture on a transfer', () => {
-		const oldImage = '507f1f77bcf86cd799439020.webp'
+  // ⚠️ B16: the whole reason `funItemUpdate` answers what the item held before this save. `idCompany`
+  // changed and the item carried a picture under the old one — `STATIC_FOLDER/item/<idCompany>/` is
+  // keyed on the company, so the file has to move or every card renders a broken image.
+  describe('relocating the picture on a transfer', () => {
+    const oldImage = '507f1f77bcf86cd799439020.webp'
 
-		beforeEach(() => vi.stubEnv('STATIC_FOLDER', '/srv/static'))
+    beforeEach(() => vi.stubEnv('STATIC_FOLDER', '/srv/static'))
 
-		it('moves the picture from the old company’s directory to the new one', async () => {
-			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+    it('moves the picture from the old company’s directory to the new one', async () => {
+      funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
 
-			await run(itemUpdate, args)
+      await run(itemUpdate, args)
 
-			expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
-				`/srv/static/item/${String(idOtherCompany)}/${oldImage}`,
-				'item',
-				String(ID_COMPANY),
-				String(itemId)
-			)
-		})
+      expect(moveFileStaticDomain).toHaveBeenCalledExactlyOnceWith(
+        `/srv/static/item/${String(idOtherCompany)}/${oldImage}`,
+        'item',
+        String(ID_COMPANY),
+        String(itemId)
+      )
+    })
 
-		// The move runs after the transaction commits, not inside it — the same placement `itemAdd`
-		// gives its own move, and for the same reason: a `rename` is not undone by an abort.
-		it('moves the picture only once the transaction has committed', async () => {
-			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
-			withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
-				await work()
-				expect(moveFileStaticDomain).not.toHaveBeenCalled()
-			})
+    // The move runs after the transaction commits, not inside it — the same placement `itemAdd`
+    // gives its own move, and for the same reason: a `rename` is not undone by an abort.
+    it('moves the picture only once the transaction has committed', async () => {
+      funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+      withTransaction.mockImplementationOnce(async (work: () => Promise<void>) => {
+        await work()
+        expect(moveFileStaticDomain).not.toHaveBeenCalled()
+      })
 
-			await run(itemUpdate, args)
+      await run(itemUpdate, args)
 
-			expect(moveFileStaticDomain).toHaveBeenCalledOnce()
-		})
+      expect(moveFileStaticDomain).toHaveBeenCalledOnce()
+    })
 
-		// The ordinary save: `idCompany` did not change, whatever picture the item carries stays exactly
-		// where it is.
-		it('does not move anything when idCompany did not change', async () => {
-			funItemUpdate.mockResolvedValueOnce({ idCompany: ID_COMPANY, image: oldImage })
+    // The ordinary save: `idCompany` did not change, whatever picture the item carries stays exactly
+    // where it is.
+    it('does not move anything when idCompany did not change', async () => {
+      funItemUpdate.mockResolvedValueOnce({ idCompany: ID_COMPANY, image: oldImage })
 
-			await run(itemUpdate, args)
+      await run(itemUpdate, args)
 
-			expect(moveFileStaticDomain).not.toHaveBeenCalled()
-		})
+      expect(moveFileStaticDomain).not.toHaveBeenCalled()
+    })
 
-		// A transfer with nothing to move: the item never had a picture, so there is no file under the
-		// old company's directory to relocate.
-		it('does not move anything when the item never had a picture', async () => {
-			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: undefined })
+    // A transfer with nothing to move: the item never had a picture, so there is no file under the
+    // old company's directory to relocate.
+    it('does not move anything when the item never had a picture', async () => {
+      funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: undefined })
 
-			await run(itemUpdate, args)
+      await run(itemUpdate, args)
 
-			expect(moveFileStaticDomain).not.toHaveBeenCalled()
-		})
+      expect(moveFileStaticDomain).not.toHaveBeenCalled()
+    })
 
-		// The residual case `itemAdd`'s own move failure leaves on record: the save has already
-		// committed, the client is told the call failed, and the item is left naming a file that is not
-		// where the card looks for it.
-		it('reports a 500 when the file cannot be relocated, and does not undo the save', async () => {
-			funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
-			const moveFailure = new Error('EXDEV: cross-device link not permitted')
-			moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
+    // The residual case `itemAdd`'s own move failure leaves on record: the save has already
+    // committed, the client is told the call failed, and the item is left naming a file that is not
+    // where the card looks for it.
+    it('reports a 500 when the file cannot be relocated, and does not undo the save', async () => {
+      funItemUpdate.mockResolvedValueOnce({ idCompany: idOtherCompany, image: oldImage })
+      const moveFailure = new Error('EXDEV: cross-device link not permitted')
+      moveFileStaticDomain.mockRejectedValueOnce(moveFailure)
 
-			await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
-			expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
-		})
-	})
+      await expect(run(itemUpdate, args)).rejects.toThrow('Internal Server Error')
+      expect(captureException).toHaveBeenCalledExactlyOnceWith(moveFailure)
+    })
+  })
 })
 
 describe('itemUpdatePublished', () => {
-	// One guard, not three: nothing moves, so the only question is whether the item is the session's.
-	// The company and category guards must stay out of it — reaching for them here would make publishing
-	// fail on a category an admin retired, which has nothing to do with what the owner asked.
-	it('checks ownership alone, then delegates the flag', async () => {
-		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).resolves.toBe(true)
+  // One guard, not three: nothing moves, so the only question is whether the item is the session's.
+  // The company and category guards must stay out of it — reaching for them here would make publishing
+  // fail on a category an admin retired, which has nothing to do with what the owner asked.
+  it('checks ownership alone, then delegates the flag', async () => {
+    await expect(run(itemUpdatePublished, { _id: itemId, published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
-		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
-		expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
-		// Nothing is re-filed, so nothing holds the category and no transaction is opened either.
-		expect(holdItemCategory).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, true)
-	})
+    expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
+    expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+    expect(throwIfItemCategoryMissing).not.toHaveBeenCalled()
+    // Nothing is re-filed, so nothing holds the category and no transaction is opened either.
+    expect(holdItemCategory).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+    expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, true)
+  })
 
-	// Both directions through the same resolver: withdrawing is the same call with the flag the other
-	// way round, and nothing in between rewrites it.
-	it('passes false through unchanged when the owner withdraws the item', async () => {
-		await expect(run(itemUpdatePublished, { _id: itemId, published: false })).resolves.toBe(true)
+  // Both directions through the same resolver: withdrawing is the same call with the flag the other
+  // way round, and nothing in between rewrites it.
+  it('passes false through unchanged when the owner withdraws the item', async () => {
+    await expect(run(itemUpdatePublished, { _id: itemId, published: false })).resolves.toBe(true)
 
-		expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, false)
-	})
+    expect(funItemUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID, false)
+  })
 
-	it('does not write when the item is not the caller’s', async () => {
-		throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
+  it('does not write when the item is not the caller’s', async () => {
+    throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(funItemUpdatePublished).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(funItemUpdatePublished).not.toHaveBeenCalled()
+  })
 
-	// The `$expr`-style refusals live on `company`, not here, but a downstream GraphQLError still has to
-	// keep its status rather than be flattened — same reason `itemUpdate` asserts it.
-	it('keeps a downstream GraphQL error instead of flattening it', async () => {
-		funItemUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+  // The `$expr`-style refusals live on `company`, not here, but a downstream GraphQLError still has to
+  // keep its status rather than be flattened — same reason `itemUpdate` asserts it.
+  it('keeps a downstream GraphQL error instead of flattening it', async () => {
+    funItemUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
 
-		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({
-			message: 'Conflict',
-			extensions: { http: { status: 409 } }
-		})
-		expect(captureException).not.toHaveBeenCalled()
-	})
+    await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toMatchObject({
+      message: 'Conflict',
+      extensions: { http: { status: 409 } }
+    })
+    expect(captureException).not.toHaveBeenCalled()
+  })
 
-	it('turns a driver failure into a 500', async () => {
-		funItemUpdatePublished.mockRejectedValueOnce(driverError)
+  it('turns a driver failure into a 500', async () => {
+    funItemUpdatePublished.mockRejectedValueOnce(driverError)
 
-		await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toThrow('Internal Server Error')
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
-	})
+    await expect(run(itemUpdatePublished, { _id: itemId, published: true })).rejects.toThrow('Internal Server Error')
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+  })
 })
 
 describe('itemsUpdatePublished', () => {
-	const itemIds = [itemId, otherItemId]
+  const itemIds = [itemId, otherItemId]
 
-	/** A list of distinct ids of whatever length a case needs — the bound is the only thing being sized. */
-	const manyIds = (howMany: number) => Array.from({ length: howMany }, () => new Types.ObjectId())
+  /** A list of distinct ids of whatever length a case needs — the bound is the only thing being sized. */
+  const manyIds = (howMany: number) => Array.from({ length: howMany }, () => new Types.ObjectId())
 
-	// One guard for the whole list and one write for the whole list, in that order. The company and
-	// category guards stay out of it for the same reason they stay out of the singular: nothing moves.
-	it('checks the whole list once, then delegates the flag for all of it', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).resolves.toBe(true)
+  // One guard for the whole list and one write for the whole list, in that order. The company and
+  // category guards stay out of it for the same reason they stay out of the singular: nothing moves.
+  it('checks the whole list once, then delegates the flag for all of it', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
-		expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
-		expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
-	})
+    expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
+    expect(throwIfShopOwnerDontOwnItem).not.toHaveBeenCalled()
+    expect(throwIfShopOwnerDontOwnCompany).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+    expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
+  })
 
-	// The direction the select-all control exists for: an owner taking a whole shop off the public site
-	// in one call, rather than one card at a time with a half-published shop visible in between.
-	it('passes false through unchanged when the owner withdraws the whole list', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: false })).resolves.toBe(true)
+  // The direction the select-all control exists for: an owner taking a whole shop off the public site
+  // in one call, rather than one card at a time with a half-published shop visible in between.
+  it('passes false through unchanged when the owner withdraws the whole list', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: itemIds, published: false })).resolves.toBe(true)
 
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, false)
-	})
+    expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, false)
+  })
 
-	// ⚠️ A repeated id has to be collapsed before the guard sees it, not after: the guard counts documents
-	// against the length of the list, so `[a, a]` would count one against two and refuse a call made
-	// entirely of the owner's own items. Both callees get the collapsed list, and it keeps its order.
-	it('collapses a repeated id before checking ownership and before writing', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: [itemId, otherItemId, itemId], published: true })).resolves.toBe(true)
+  // ⚠️ A repeated id has to be collapsed before the guard sees it, not after: the guard counts documents
+  // against the length of the list, so `[a, a]` would count one against two and refuse a call made
+  // entirely of the owner's own items. Both callees get the collapsed list, and it keeps its order.
+  it('collapses a repeated id before checking ownership and before writing', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: [itemId, otherItemId, itemId], published: true })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
-	})
+    expect(throwIfShopOwnerDontOwnAllItems).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemIds)
+    expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(itemIds, SHOP_OWNER_ID, true)
+  })
 
-	// ⚠️ 400 and not a quiet `true`. An empty selection is a client that lost track of what was ticked,
-	// and answering success would show the owner a shop they believe they just published. Nothing is read
-	// and nothing is written — a refusal must not cost a round trip to Mongo either.
-	it('refuses an empty list without checking or writing anything', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: [], published: true })).rejects.toMatchObject({
-			message: 'Bad Request',
-			extensions: { http: { status: 400 }, description: '_ids: at least one item is required' }
-		})
-		expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
-		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
-	})
+  // ⚠️ 400 and not a quiet `true`. An empty selection is a client that lost track of what was ticked,
+  // and answering success would show the owner a shop they believe they just published. Nothing is read
+  // and nothing is written — a refusal must not cost a round trip to Mongo either.
+  it('refuses an empty list without checking or writing anything', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: [], published: true })).rejects.toMatchObject({
+      message: 'Bad Request',
+      extensions: { http: { status: 400 }, description: '_ids: at least one item is required' }
+    })
+    expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
+    expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+  })
 
-	// ⚠️ The bound is the only thing standing between `[ID!]!` and a query the caller sizes: both the
-	// guard's count and the write scan a `$in` the request chose. Asserted as a literal because the
-	// number is a promise the frontend keeps too — it sends a bigger selection in runs of this size.
-	it('is bounded at five hundred items per call', () => {
-		expect(MAX_ITEMS_PER_CALL).toBe(500)
-	})
+  // ⚠️ The bound is the only thing standing between `[ID!]!` and a query the caller sizes: both the
+  // guard's count and the write scan a `$in` the request chose. Asserted as a literal because the
+  // number is a promise the frontend keeps too — it sends a bigger selection in runs of this size.
+  it('is bounded at five hundred items per call', () => {
+    expect(MAX_ITEMS_PER_CALL).toBe(500)
+  })
 
-	it('accepts a list exactly as long as the bound allows', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL), published: true })).resolves.toBe(true)
+  it('accepts a list exactly as long as the bound allows', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL), published: true })).resolves.toBe(true)
 
-		expect(funItemsUpdatePublished).toHaveBeenCalledOnce()
-	})
+    expect(funItemsUpdatePublished).toHaveBeenCalledOnce()
+  })
 
-	it('refuses one item more than that, without checking or writing anything', async () => {
-		await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL + 1), published: true })).rejects.toMatchObject({
-			message: 'Bad Request',
-			extensions: { http: { status: 400 }, description: `_ids: at most ${MAX_ITEMS_PER_CALL} items per call` }
-		})
-		expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
-		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
-	})
+  it('refuses one item more than that, without checking or writing anything', async () => {
+    await expect(run(itemsUpdatePublished, { _ids: manyIds(MAX_ITEMS_PER_CALL + 1), published: true })).rejects.toMatchObject({
+      message: 'Bad Request',
+      extensions: { http: { status: 400 }, description: `_ids: at most ${MAX_ITEMS_PER_CALL} items per call` }
+    })
+    expect(throwIfShopOwnerDontOwnAllItems).not.toHaveBeenCalled()
+    expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+  })
 
-	// ⚠️ The order of the two steps, and it is the de-duplication that comes first: a client that ticked
-	// every box twice sends twice the bound and is asking for a list the server is perfectly willing to
-	// serve. Measuring the raw list instead would refuse it.
-	it('measures the bound after collapsing repeats, not before', async () => {
-		const ids = manyIds(MAX_ITEMS_PER_CALL)
+  // ⚠️ The order of the two steps, and it is the de-duplication that comes first: a client that ticked
+  // every box twice sends twice the bound and is asking for a list the server is perfectly willing to
+  // serve. Measuring the raw list instead would refuse it.
+  it('measures the bound after collapsing repeats, not before', async () => {
+    const ids = manyIds(MAX_ITEMS_PER_CALL)
 
-		await expect(run(itemsUpdatePublished, { _ids: [...ids, ids[0]], published: true })).resolves.toBe(true)
+    await expect(run(itemsUpdatePublished, { _ids: [...ids, ids[0]], published: true })).resolves.toBe(true)
 
-		expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(ids, SHOP_OWNER_ID, true)
-	})
+    expect(funItemsUpdatePublished).toHaveBeenCalledExactlyOnceWith(ids, SHOP_OWNER_ID, true)
+  })
 
-	// All or nothing: one stranger's id in the list refuses every item in it, including the ones the
-	// caller does own. `throwIfShopOwnerDontOwnAllItems` is where that decision lives; this is the half of
-	// it that matters here — nothing is written.
-	it('does not write anything when one item in the list is not the caller’s', async () => {
-		throwIfShopOwnerDontOwnAllItems.mockRejectedValueOnce(forbidden())
+  // All or nothing: one stranger's id in the list refuses every item in it, including the ones the
+  // caller does own. `throwIfShopOwnerDontOwnAllItems` is where that decision lives; this is the half of
+  // it that matters here — nothing is written.
+  it('does not write anything when one item in the list is not the caller’s', async () => {
+    throwIfShopOwnerDontOwnAllItems.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(funItemsUpdatePublished).not.toHaveBeenCalled()
-	})
+    await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(funItemsUpdatePublished).not.toHaveBeenCalled()
+  })
 
-	it('keeps a downstream GraphQL error instead of flattening it', async () => {
-		funItemsUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
+  it('keeps a downstream GraphQL error instead of flattening it', async () => {
+    funItemsUpdatePublished.mockRejectedValueOnce(new GraphQLError('Conflict', { extensions: { http: { status: 409 } } }))
 
-		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({
-			message: 'Conflict',
-			extensions: { http: { status: 409 } }
-		})
-		expect(captureException).not.toHaveBeenCalled()
-	})
+    await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toMatchObject({
+      message: 'Conflict',
+      extensions: { http: { status: 409 } }
+    })
+    expect(captureException).not.toHaveBeenCalled()
+  })
 
-	it('turns a driver failure into a 500', async () => {
-		funItemsUpdatePublished.mockRejectedValueOnce(driverError)
+  it('turns a driver failure into a 500', async () => {
+    funItemsUpdatePublished.mockRejectedValueOnce(driverError)
 
-		await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toThrow('Internal Server Error')
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
-	})
+    await expect(run(itemsUpdatePublished, { _ids: itemIds, published: true })).rejects.toThrow('Internal Server Error')
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+  })
 })
 
 describe('itemDel', () => {
-	it('checks ownership then delegates the withdrawal and answers true', async () => {
-		await expect(run(itemDel, { _id: itemId })).resolves.toBe(true)
+  it('checks ownership then delegates the withdrawal and answers true', async () => {
+    await expect(run(itemDel, { _id: itemId })).resolves.toBe(true)
 
-		expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
-		expect(funItemDelete).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID)
-		// A withdrawal leaves `idCategory` where it is, so it races nothing on the taxonomy.
-		expect(holdItemCategory).not.toHaveBeenCalled()
-		expect(startSession).not.toHaveBeenCalled()
-	})
+    expect(throwIfShopOwnerDontOwnItem).toHaveBeenCalledExactlyOnceWith(SHOP_OWNER_ID, itemId)
+    expect(funItemDelete).toHaveBeenCalledExactlyOnceWith(itemId, SHOP_OWNER_ID)
+    // A withdrawal leaves `idCategory` where it is, so it races nothing on the taxonomy.
+    expect(holdItemCategory).not.toHaveBeenCalled()
+    expect(startSession).not.toHaveBeenCalled()
+  })
 
-	// The guard filters `deleted`, so a second call on the same item answers 403 rather than repeating
-	// the stamp — which is the only way an already-withdrawn item can be named at all, since it is gone
-	// from `companyItems`.
-	it('does not withdraw when the item is not the caller’s, or already withdrawn', async () => {
-		throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
+  // The guard filters `deleted`, so a second call on the same item answers 403 rather than repeating
+  // the stamp — which is the only way an already-withdrawn item can be named at all, since it is gone
+  // from `companyItems`.
+  it('does not withdraw when the item is not the caller’s, or already withdrawn', async () => {
+    throwIfShopOwnerDontOwnItem.mockRejectedValueOnce(forbidden())
 
-		await expect(run(itemDel, { _id: itemId })).rejects.toMatchObject({ message: 'Forbidden' })
-		expect(funItemDelete).not.toHaveBeenCalled()
-	})
+    await expect(run(itemDel, { _id: itemId })).rejects.toMatchObject({ message: 'Forbidden' })
+    expect(funItemDelete).not.toHaveBeenCalled()
+  })
 
-	it('turns a driver failure into a 500', async () => {
-		funItemDelete.mockRejectedValueOnce(driverError)
+  it('turns a driver failure into a 500', async () => {
+    funItemDelete.mockRejectedValueOnce(driverError)
 
-		await expect(run(itemDel, { _id: itemId })).rejects.toThrow('Internal Server Error')
-		expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
-	})
+    await expect(run(itemDel, { _id: itemId })).rejects.toThrow('Internal Server Error')
+    expect(captureException).toHaveBeenCalledExactlyOnceWith(driverError)
+  })
 })
 
 // A session that is opened and not ended is a connection the driver never gets back, and the mutations
 // that open one can fail in three places: the hold, the write, and the transaction itself. `finally` is
 // what makes the third case survivable, and only a test that fails the transaction says so.
 describe('the session the two writing mutations open', () => {
-	const paths: [string, () => Promise<unknown>][] = [
-		['itemAdd', () => run(itemAdd, { item }) as Promise<unknown>],
-		['itemUpdate', () => run(itemUpdate, { _id: itemId, item }) as Promise<unknown>]
-	]
+  const paths: [string, () => Promise<unknown>][] = [
+    ['itemAdd', () => run(itemAdd, { item }) as Promise<unknown>],
+    ['itemUpdate', () => run(itemUpdate, { _id: itemId, item }) as Promise<unknown>]
+  ]
 
-	it.each(paths)('%s opens one session, runs one transaction in it and ends it', async (_name, call) => {
-		await call()
+  it.each(paths)('%s opens one session, runs one transaction in it and ends it', async (_name, call) => {
+    await call()
 
-		expect(startSession).toHaveBeenCalledOnce()
-		expect(withTransaction).toHaveBeenCalledOnce()
-		expect(endSession).toHaveBeenCalledOnce()
-	})
+    expect(startSession).toHaveBeenCalledOnce()
+    expect(withTransaction).toHaveBeenCalledOnce()
+    expect(endSession).toHaveBeenCalledOnce()
+  })
 
-	it.each(paths)('%s ends the session when the transaction fails', async (_name, call) => {
-		withTransaction.mockRejectedValueOnce(driverError)
+  it.each(paths)('%s ends the session when the transaction fails', async (_name, call) => {
+    withTransaction.mockRejectedValueOnce(driverError)
 
-		await expect(call()).rejects.toThrow('Internal Server Error')
-		expect(endSession).toHaveBeenCalledOnce()
-	})
+    await expect(call()).rejects.toThrow('Internal Server Error')
+    expect(endSession).toHaveBeenCalledOnce()
+  })
 })

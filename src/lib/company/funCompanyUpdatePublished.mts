@@ -23,9 +23,9 @@ import { Types } from 'mongoose'
  * asked for, and a no-op is not an error.
  */
 export async function funCompanyUpdatePublished(companyId: Types.ObjectId, shopOwnerId: Types.ObjectId, published: boolean) {
-	const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: { published } }).exec()
+  const ret = await Company.updateOne({ _id: companyId, idShopOwner: shopOwnerId }, { $set: { published } }).exec()
 
-	if (ret.matchedCount !== 1) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== 1) {
+    throwInternalError()
+  }
 }

@@ -15,9 +15,9 @@ import { trusted } from 'mongoose'
  * the `deleted` path.
  */
 export const shopOwnerCompanies = {
-	type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLCompany))),
-	description: 'Get companies shopOwner',
-	async resolve(_: unknown, {}, ctx: IContextShopOwnerAuthenticatedResource) {
-		return Company.find({ idShopOwner: ctx.state.user._id, deleted: trusted({ $exists: false }) }).lean()
-	}
+  type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLCompany))),
+  description: 'Get companies shopOwner',
+  async resolve(_: unknown, {}, ctx: IContextShopOwnerAuthenticatedResource) {
+    return Company.find({ idShopOwner: ctx.state.user._id, deleted: trusted({ $exists: false }) }).lean()
+  }
 }

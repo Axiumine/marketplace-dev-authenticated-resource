@@ -23,13 +23,13 @@ import { trusted, Types } from 'mongoose'
  * literal value and the query would fail casting it against the `deleted` path.
  */
 export async function throwIfShopOwnerDontOwnItem(shopOwnerId: Types.ObjectId, itemId: Types.ObjectId) {
-	const found = await Item.countDocuments({
-		_id: itemId,
-		deleted: trusted({ $exists: false }),
-		idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) })
-	}).lean()
+  const found = await Item.countDocuments({
+    _id: itemId,
+    deleted: trusted({ $exists: false }),
+    idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) })
+  }).lean()
 
-	if (found === 0) {
-		throw throwForbiddenError()
-	}
+  if (found === 0) {
+    throw throwForbiddenError()
+  }
 }

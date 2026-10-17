@@ -27,15 +27,15 @@ import { IContextShopOwnerAuthenticatedResource } from '@lib/auth/IContextShopOw
  * nobody, deleted with a success reported.
  */
 export async function endEverySession(ctx: IContextShopOwnerAuthenticatedResource) {
-	await revokeAllSessionsForAccount({ store: redisClient, tier: TIER.shopOwner, accountId: `${ctx.state.user._id}` })
+  await revokeAllSessionsForAccount({ store: redisClient, tier: TIER.shopOwner, accountId: `${ctx.state.user._id}` })
 
-	const authorization = ctx.request.header?.authorization
+  const authorization = ctx.request.header?.authorization
 
-	if (typeof authorization === 'undefined') {
-		return
-	}
+  if (typeof authorization === 'undefined') {
+    return
+  }
 
-	// `Bearer access:<token>` minus the scheme is the prefixed token every session helper takes, and the
-	// `access:` half must stay: it is what tells an access hash from a refresh one inside the digest.
-	await deleteSession(redisClient, authorization.replace('Bearer ', ''))
+  // `Bearer access:<token>` minus the scheme is the prefixed token every session helper takes, and the
+  // `access:` half must stay: it is what tells an access hash from a refresh one inside the digest.
+  await deleteSession(redisClient, authorization.replace('Bearer ', ''))
 }

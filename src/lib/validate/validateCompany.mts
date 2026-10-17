@@ -1,14 +1,14 @@
 import { ICompanyUpdate } from '@lib/company/funCompanyUpdate.mjs'
 import {
-	optionalSlug,
-	optionalText,
-	optionalTextExactLength,
-	optionalTextWithFormat,
-	requiredEmail,
-	requiredText,
-	SHAPE_UNIQUE_CODE,
-	SHAPE_VAT_NUMBER,
-	textWithFormat
+  optionalSlug,
+  optionalText,
+  optionalTextExactLength,
+  optionalTextWithFormat,
+  requiredEmail,
+  requiredText,
+  SHAPE_UNIQUE_CODE,
+  SHAPE_VAT_NUMBER,
+  textWithFormat
 } from '@lib/validate/fields.mjs'
 import { IAddressInput, validateAddress } from '@lib/validate/validateAddress.mjs'
 
@@ -52,25 +52,25 @@ export type ICompanyInput = Omit<ICompanyUpdate, 'address'> & { address: IAddres
  * that cannot be bypassed.
  */
 export const validateCompany = (company: ICompanyInput): ICompanyUpdate => ({
-	legalName: requiredText(company.legalName, 'company.legalName', MAX_LEGAL_NAME),
-	vatNumber: textWithFormat(company.vatNumber, 'company.vatNumber', SHAPE_VAT_NUMBER, 'the VAT number is 11 digits'),
-	taxCode: optionalTextExactLength(company.taxCode, 'company.taxCode', TAX_CODE_LENGTH),
-	contactPerson: requiredText(company.contactPerson, 'company.contactPerson', MAX_CONTACT_PERSON),
-	administrator: requiredText(company.administrator, 'company.administrator', MAX_ADMINISTRATOR),
-	uniqueCode: optionalTextWithFormat(
-		company.uniqueCode,
-		'company.uniqueCode',
-		SHAPE_UNIQUE_CODE,
-		'the unique code is 7 alphanumeric characters'
-	),
-	certifiedEmail: requiredEmail(company.certifiedEmail, 'company.certifiedEmail'),
-	address: validateAddress(company.address, 'company.address'),
-	registryExtract: requiredText(company.registryExtract, 'company.registryExtract', MAX_REGISTRY_EXTRACT),
-	// `publicName` is the one field B42 pins a `minLength: 1` on at the database — blank already comes
-	// back `undefined` from `optionalText`, the same as every other optional field, so an owner clearing
-	// it (or a caller that only ever sent whitespace) is an `$unset` rather than a write the future
-	// migration would reject.
-	publicName: optionalText(company.publicName, 'company.publicName', MAX_PUBLIC_NAME),
-	slug: optionalSlug(company.slug, 'company.slug', MAX_SLUG),
-	description: optionalText(company.description, 'company.description', MAX_DESCRIPTION)
+  legalName: requiredText(company.legalName, 'company.legalName', MAX_LEGAL_NAME),
+  vatNumber: textWithFormat(company.vatNumber, 'company.vatNumber', SHAPE_VAT_NUMBER, 'the VAT number is 11 digits'),
+  taxCode: optionalTextExactLength(company.taxCode, 'company.taxCode', TAX_CODE_LENGTH),
+  contactPerson: requiredText(company.contactPerson, 'company.contactPerson', MAX_CONTACT_PERSON),
+  administrator: requiredText(company.administrator, 'company.administrator', MAX_ADMINISTRATOR),
+  uniqueCode: optionalTextWithFormat(
+    company.uniqueCode,
+    'company.uniqueCode',
+    SHAPE_UNIQUE_CODE,
+    'the unique code is 7 alphanumeric characters'
+  ),
+  certifiedEmail: requiredEmail(company.certifiedEmail, 'company.certifiedEmail'),
+  address: validateAddress(company.address, 'company.address'),
+  registryExtract: requiredText(company.registryExtract, 'company.registryExtract', MAX_REGISTRY_EXTRACT),
+  // `publicName` is the one field B42 pins a `minLength: 1` on at the database — blank already comes
+  // back `undefined` from `optionalText`, the same as every other optional field, so an owner clearing
+  // it (or a caller that only ever sent whitespace) is an `$unset` rather than a write the future
+  // migration would reject.
+  publicName: optionalText(company.publicName, 'company.publicName', MAX_PUBLIC_NAME),
+  slug: optionalSlug(company.slug, 'company.slug', MAX_SLUG),
+  description: optionalText(company.description, 'company.description', MAX_DESCRIPTION)
 })
