@@ -14,44 +14,44 @@ import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLSt
  * out otherwise, which is not the same as storing an empty string.
  */
 export const GraphQLCompany = new GraphQLObjectType({
-	name: 'GraphQLCompany',
-	fields: () => ({
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		idShopOwner: { type: new GraphQLNonNull(GraphQLID) },
-		legalName: { type: new GraphQLNonNull(GraphQLString) },
-		vatNumber: { type: new GraphQLNonNull(GraphQLString) },
-		taxCode: { type: GraphQLString },
-		contactPerson: { type: new GraphQLNonNull(GraphQLString) },
-		administrator: { type: new GraphQLNonNull(GraphQLString) },
-		uniqueCode: { type: GraphQLString },
-		certifiedEmail: { type: new GraphQLNonNull(GraphQLString) },
-		address: { type: new GraphQLNonNull(GraphQLCompanyAddress) },
-		registryExtract: { type: new GraphQLNonNull(GraphQLString) },
-		// The shop half, added by 20260804010000. A company IS the shop on this platform, so the
-		// storefront's fields live on this type rather than on one of its own.
-		//
-		// Three nullable, one not, and the split is the collection's: `published` was backfilled onto
-		// every stored company by the migration and is required, while a company written before the
-		// catalogue existed has no trading name, no slug and no description and cannot be given one
-		// retroactively. The owner fills them in when they decide to go live.
-		publicName: { type: GraphQLString },
-		slug: { type: GraphQLString },
-		description: { type: GraphQLString },
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
-	})
+  name: 'GraphQLCompany',
+  fields: () => ({
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    idShopOwner: { type: new GraphQLNonNull(GraphQLID) },
+    legalName: { type: new GraphQLNonNull(GraphQLString) },
+    vatNumber: { type: new GraphQLNonNull(GraphQLString) },
+    taxCode: { type: GraphQLString },
+    contactPerson: { type: new GraphQLNonNull(GraphQLString) },
+    administrator: { type: new GraphQLNonNull(GraphQLString) },
+    uniqueCode: { type: GraphQLString },
+    certifiedEmail: { type: new GraphQLNonNull(GraphQLString) },
+    address: { type: new GraphQLNonNull(GraphQLCompanyAddress) },
+    registryExtract: { type: new GraphQLNonNull(GraphQLString) },
+    // The shop half, added by 20260804010000. A company IS the shop on this platform, so the
+    // storefront's fields live on this type rather than on one of its own.
+    //
+    // Three nullable, one not, and the split is the collection's: `published` was backfilled onto
+    // every stored company by the migration and is required, while a company written before the
+    // catalogue existed has no trading name, no slug and no description and cannot be given one
+    // retroactively. The owner fills them in when they decide to go live.
+    publicName: { type: GraphQLString },
+    slug: { type: GraphQLString },
+    description: { type: GraphQLString },
+    published: { type: new GraphQLNonNull(GraphQLBoolean) }
+  })
 })
 
 const GraphQLCompanyAddress = new GraphQLObjectType({
-	name: 'GraphQLCompanyAddress',
-	fields: () => ({
-		...GraphQLBaseAddressFrag,
-		position: { type: new GraphQLNonNull(GraphQLCompanyPosition) }
-	})
+  name: 'GraphQLCompanyAddress',
+  fields: () => ({
+    ...GraphQLBaseAddressFrag,
+    position: { type: new GraphQLNonNull(GraphQLCompanyPosition) }
+  })
 })
 
 const GraphQLCompanyPosition = new GraphQLObjectType({
-	name: 'GraphQLCompanyPosition',
-	fields: () => ({
-		...GraphQLPositionFrag
-	})
+  name: 'GraphQLCompanyPosition',
+  fields: () => ({
+    ...GraphQLPositionFrag
+  })
 })

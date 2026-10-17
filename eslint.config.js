@@ -33,21 +33,21 @@ const sharedTsBlock = eslintConfig.find((c) => c.files?.includes('src/**/*.{d.ts
  * that reason.
  */
 const REDIS_DEL_MESSAGE =
-	'BCON-08: one Redis key per `del`. Redis is a cluster, so a multi-key `DEL`/`UNLINK` throws CROSSSLOT unless every key hashes to the same slot, which digested session and rate-limit keys never do. Delete one key per call and batch with `Promise.all(keys.map((key) => store.del(key)))` — the shape the session helpers already carry. NFR-SC03, RISK_REGISTER R32.'
+  'BCON-08: one Redis key per `del`. Redis is a cluster, so a multi-key `DEL`/`UNLINK` throws CROSSSLOT unless every key hashes to the same slot, which digested session and rate-limit keys never do. Delete one key per call and batch with `Promise.all(keys.map((key) => store.del(key)))` — the shape the session helpers already carry. NFR-SC03, RISK_REGISTER R32.'
 
 const REDIS_ONE_KEY_PER_DEL = [
-	{
-		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/][arguments.length>1]',
-		message: REDIS_DEL_MESSAGE
-	},
-	{
-		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > ArrayExpression.arguments',
-		message: REDIS_DEL_MESSAGE
-	},
-	{
-		selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > SpreadElement.arguments',
-		message: REDIS_DEL_MESSAGE
-	}
+  {
+    selector: 'CallExpression[callee.property.name=/^(del|unlink)$/][arguments.length>1]',
+    message: REDIS_DEL_MESSAGE
+  },
+  {
+    selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > ArrayExpression.arguments',
+    message: REDIS_DEL_MESSAGE
+  },
+  {
+    selector: 'CallExpression[callee.property.name=/^(del|unlink)$/] > SpreadElement.arguments',
+    message: REDIS_DEL_MESSAGE
+  }
 ]
 
 /*
@@ -78,99 +78,99 @@ const REDIS_ONE_KEY_PER_DEL = [
  * `disabled: true`, and a fixture is an object literal like any other.
  */
 const DISABLED_NO_WRITE = [
-	{
-		selector:
-			'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
-		message:
-			"ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an admin removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
-	}
+  {
+    selector:
+      'ObjectExpression > Property[key.name=/^disabled(By|Reason)?$/], ObjectExpression > Property[key.value=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.name=/^disabled(By|Reason)?$/], AssignmentExpression[left.property.value=/^disabled(By|Reason)?$/]',
+    message:
+      "ADR-044: `disabled`, `disabledBy` and `disabledReason` are the Admin tier's to write, never this tier's — a service that could raise or clear a suspension could lift a sanction standing against itself, and the platform owner's ruling is that only an admin removes one. A self-service closure stamps `deleted` and stops. The reads stay legal: checkUserAuthorizationDisDel at login and findAccountForSession on every refresh are what enforce the flag."
+  }
 ]
 
 /* Hoisted so both config objects below can share it — see the note above the second one. */
 const RESTRICTED_SYNTAX = [
-	{
-		selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
-		message:
-			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-	},
-	{
-		selector: "Property[key.name='rejectUnauthorized']",
-		message:
-			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-	},
-	{
-		selector: "Property[key.value='rejectUnauthorized']",
-		message:
-			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-	},
-	{
-		selector: "Property[key.name='sendDefaultPii']",
-		message:
-			'the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
-	},
-	// Two settings one word from being reversed, with nothing else that would
-	// notice. `!=` rather than a positive match because the shape to refuse is *any other
-	// value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
-	// and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
-	// `beforeSend` cannot satisfy it on the outer literal's behalf.
-	{
-		selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
-		message:
-			"the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
-	},
-	{
-		selector: "ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
-		message:
-			'`beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
-	},
-	{
-		selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
-		message:
-			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-	},
-	{
-		selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
-		message:
-			'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
-	},
-	// The two `shopOwner` fields the Admin tier owns outright, refused here so that "no
-	// ShopOwner-tier service selects them" stops being a claim about how the code happens to be
-	// written today. `notes` is free text an admin wrote *about* a named person, encrypted at rest
-	// and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
-	// is BC-03's approval gate itself: a service that could write it could approve its own account.
-	//
-	// ⚠️ The two authorization services carry a narrower `waitApprov` rule than this one — a write
-	// ban only, scoped to their `src/**` — because `checkShopOwnerApproval` runs at login and on
-	// every refresh, and a rule refusing the read would refuse the gate. Nothing changes here: by
-	// the time a request reaches this service its session has already been through that gate, so a
-	// resource resolver reading the flag would be re-deciding a question already answered, on a
-	// field it has no other business with. Keep all four shapes.
-	//
-	// The list and the whole argument live on `ADMIN_ONLY_FIELDS_SHOP_OWNER` in
-	// `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
-	// ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
-	// `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
-	// honest is the test in that repo asserting both names still resolve to real paths on
-	// `ShopOwnerSchema`, so a rename fails in the repo that owns the shape rather than silently
-	// leaving three selectors pointing at a field that no longer exists.
-	//
-	// Four shapes per field, because the projection is the one that matters and it is none of the
-	// other three: a Mongoose projection is a single space-separated string, where the field name is
-	// neither a key nor a member — hence `Literal` with a word-bounded regex rather than a bare
-	// substring, which would also fire on any prose mentioning the field. `TSPropertySignature` is
-	// the step before it, where the interface the projection is typed against grows the field first.
-	{
-		selector:
-			"Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
-		message:
-			"`shopOwner.notes` is the Admin tier's. It is what an admin wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is ADMIN_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
-	},
-	{
-		selector:
-			"Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
-		message:
-			"`shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and a resource resolver has no reason to read it either: checkShopOwnerApproval already ran at login and runs again on every refresh, so a session that reached this service is approved by construction. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER in marketplace-common."
-	}
+  {
+    selector: "AssignmentExpression[left.property.name='rejectUnauthorized']",
+    message:
+      'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+  },
+  {
+    selector: "Property[key.name='rejectUnauthorized']",
+    message:
+      'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+  },
+  {
+    selector: "Property[key.value='rejectUnauthorized']",
+    message:
+      'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+  },
+  {
+    selector: "Property[key.name='sendDefaultPii']",
+    message:
+      'the blanket Sentry PII flag is absent by decision, not set to false. Name the individual dataCollection categories instead — the observability section of docs/architecture.md says which, and why.'
+  },
+  // Two settings one word from being reversed, with nothing else that would
+  // notice. `!=` rather than a positive match because the shape to refuse is *any other
+  // value*, including the `'medium'` the SDK falls back to when the key is dropped entirely —
+  // and the pair selector uses `:has(> …)` so that an unrelated nested object carrying a
+  // `beforeSend` cannot satisfy it on the outer literal's behalf.
+  {
+    selector: "Property[key.name='maxIncomingRequestBodySize'][value.value!='none']",
+    message:
+      "the request body is never captured. `maxIncomingRequestBodySize: 'none'` is the only gate on it — `dataCollection.httpBodies` reaches the span attribute and not the event, which is how a plaintext password was measured on the wire."
+  },
+  {
+    selector: "ObjectExpression:has(> Property[key.name='beforeSend']):not(:has(> Property[key.name='beforeSendTransaction']))",
+    message:
+      '`beforeSend` and `beforeSendTransaction` are wired together or not at all. The SDK routes transaction events to the second hook only, and the client address is on the transaction — one hook without the other means a `tracesSampleRate` switches the redaction off.'
+  },
+  {
+    selector: "MemberExpression[property.name='NODE_TLS_REJECT_UNAUTHORIZED']",
+    message:
+      'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+  },
+  {
+    selector: "Literal[value='NODE_TLS_REJECT_UNAUTHORIZED']",
+    message:
+      'certificate verification stays on. Trust the collector CA from outside the process — NODE_EXTRA_CA_CERTS=/path/to/ca.pem — as the parent workspace SETUP.md §7 describes.'
+  },
+  // The two `shopOwner` fields the Admin tier owns outright, refused here so that "no
+  // ShopOwner-tier service selects them" stops being a claim about how the code happens to be
+  // written today. `notes` is free text an admin wrote *about* a named person, encrypted at rest
+  // and the one encrypted field on the platform whose subject never gets to read it. `waitApprov`
+  // is BC-03's approval gate itself: a service that could write it could approve its own account.
+  //
+  // ⚠️ The two authorization services carry a narrower `waitApprov` rule than this one — a write
+  // ban only, scoped to their `src/**` — because `checkShopOwnerApproval` runs at login and on
+  // every refresh, and a rule refusing the read would refuse the gate. Nothing changes here: by
+  // the time a request reaches this service its session has already been through that gate, so a
+  // resource resolver reading the flag would be re-deciding a question already answered, on a
+  // field it has no other business with. Keep all four shapes.
+  //
+  // The list and the whole argument live on `ADMIN_ONLY_FIELDS_SHOP_OWNER` in
+  // `marketplace-common` — including why this is a lint rule and not an anti-corruption layer.
+  // ⚠️ The two names are duplicated from it rather than imported: an `import` here would make every
+  // `yarn lint` in this repo depend on a built, deployed `dist/` next door. What keeps the copies
+  // honest is the test in that repo asserting both names still resolve to real paths on
+  // `ShopOwnerSchema`, so a rename fails in the repo that owns the shape rather than silently
+  // leaving three selectors pointing at a field that no longer exists.
+  //
+  // Four shapes per field, because the projection is the one that matters and it is none of the
+  // other three: a Mongoose projection is a single space-separated string, where the field name is
+  // neither a key nor a member — hence `Literal` with a word-bounded regex rather than a bare
+  // substring, which would also fire on any prose mentioning the field. `TSPropertySignature` is
+  // the step before it, where the interface the projection is typed against grows the field first.
+  {
+    selector:
+      "Property[key.name='notes'], TSPropertySignature[key.name='notes'], MemberExpression[property.name='notes'], Literal[value=/(^|\\s)notes(\\s|$)/]",
+    message:
+      "`shopOwner.notes` is the Admin tier's. It is what an admin wrote about this shop owner, and the subject never reads it — no BC-01/ShopOwner-tier service selects, projects, types or returns it. The list is ADMIN_ONLY_FIELDS_SHOP_OWNER in marketplace-common."
+  },
+  {
+    selector:
+      "Property[key.name='waitApprov'], TSPropertySignature[key.name='waitApprov'], MemberExpression[property.name='waitApprov'], Literal[value=/(^|\\s)waitApprov(\\s|$)/]",
+    message:
+      "`shopOwner.waitApprov` is BC-03's approval gate. A ShopOwner-tier service that could write it could approve its own account, and a resource resolver has no reason to read it either: checkShopOwnerApproval already ran at login and runs again on every refresh, so a session that reached this service is approved by construction. The constant is APPROVAL_GATE_FIELD_SHOP_OWNER in marketplace-common."
+  }
 ]
 
 /*
@@ -194,23 +194,23 @@ const RESTRICTED_SYNTAX = [
  * counts, the catalogue resolvers query, and a rule refusing those would refuse the tier's own work.
  */
 const ITEMCATEGORY_NO_WRITE = [
-	{
-		selector:
-			"CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
-		message:
-			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
-	},
-	{
-		selector:
-			"CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
-		message:
-			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
-	},
-	{
-		selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
-		message:
-			'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
-	}
+  {
+    selector:
+      "CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+    message:
+      'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|findOneAndUpdate|insertMany|replaceOne|updateMany|updateOne)$/]",
+    message:
+      'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+  },
+  {
+    selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
+    message:
+      'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
+  }
 ]
 
 /*
@@ -225,23 +225,23 @@ const ITEMCATEGORY_NO_WRITE = [
  * `holdItemCategory.mts` too, and `findOneAndUpdate` stays banned in every other file of this repo.
  */
 const ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD = [
-	{
-		selector:
-			"CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
-		message:
-			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
-	},
-	{
-		selector:
-			"CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
-		message:
-			'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
-	},
-	{
-		selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
-		message:
-			'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
-	}
+  {
+    selector:
+      "CallExpression[callee.object.name='ItemCategory'][callee.property.name=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
+    message:
+      'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+  },
+  {
+    selector:
+      "CallExpression[callee.object.name='ItemCategory'][callee.property.value=/^(bulkWrite|create|deleteMany|deleteOne|findOneAndDelete|findOneAndReplace|insertMany|replaceOne|updateMany|updateOne)$/]",
+    message:
+      'ADR-012: `itemCategory` is written by marketplace-dev-admin-authenticated-resource and by nothing else. The two-level cap is enforced there, in `throwIfParentNotTopLevel`, because a `$jsonSchema` validator cannot read the parent document to learn how deep this one sits — a MongoDB limit rather than a preference — so a write from any other tier is a third level with nothing left to refuse it. Reads are untouched: `aggregate`, `countDocuments`, `find` and `findOne` are deliberately absent from this list, because the category query resolvers are what the tier exists for.'
+  },
+  {
+    selector: "ImportSpecifier[imported.name='ItemCategory'][local.name!='ItemCategory']",
+    message:
+      'ADR-012: import the itemCategory model under its own name. The two selectors above are keyed on the identifier `ItemCategory`, so `import { ItemCategory as Categories }` renames the model out of their reach and the ban with it. A rename that buys nothing is refused rather than left standing as the one way through.'
+  }
 ]
 
 /*
@@ -259,126 +259,129 @@ const ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD = [
  * importing them, and `marketplace-common`'s own suite tests the models themselves.
  */
 const INTEGRATION_SEED_NO_MODEL = {
-	patterns: [
-		{
-			group: ['@axiumine/marketplace-common/models/MongoDB/*'],
-			message:
-				'An integration test seeds through the raw driver — `mongoose.connection.db!.collection(...)` — and never through a Mongoose model. A model can diverge from the collection\'s $jsonSchema validator (ShopOwner did), so a model-shaped seed writes a document this suite never described. Testing a model belongs in marketplace-common. docs/testing.md "Integration test conventions", RISK_REGISTER R33.'
-		}
-	]
+  patterns: [
+    {
+      group: ['@axiumine/marketplace-common/models/MongoDB/*'],
+      message:
+        'An integration test seeds through the raw driver — `mongoose.connection.db!.collection(...)` — and never through a Mongoose model. A model can diverge from the collection\'s $jsonSchema validator (ShopOwner did), so a model-shaped seed writes a document this suite never described. Testing a model belongs in marketplace-common. docs/testing.md "Integration test conventions", RISK_REGISTER R33.'
+    }
+  ]
 }
 
 export default [
-	// `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
-	// repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
-	// run leaves one behind, and eslint then lints a second copy of every test file. Those copies
-	// carry `@ts-nocheck` and sit outside every tsconfig, so the lint fails with dozens of errors
-	// that point at a directory .gitignore already ignores.
-	// `.qodana/**` is what `--results-dir` writes: a SARIF file and a bundled HTML report whose
-	// minified browser JS is someone else's code. The root-JS block at the bottom of this file is
-	// scoped tightly enough that none of it is reachable anyway — this entry is the second lock.
-	{ ignores: ['dist/**', 'coverage/**', '.stryker-tmp/**', 'reports/**', '.qodana/**'] },
-	...eslintConfig,
-	{
-		files: ['test/**/*.mts', 'vitest.*.mts'],
-		languageOptions: {
-			parser: tsParser,
-			parserOptions: { ecmaVersion: 'latest', sourceType: 'module' }
-		},
-		plugins: sharedTsBlock.plugins,
-		rules: sharedTsBlock.rules
-	},
-	// The root-level JS config files — this file and stryker.config.mjs. The shared config's JS block
-	// is scoped to `src/**/*.{js,cjs,mjs}`, and a service whose sources are all .mts has no JS under
-	// src/ at all, so without this block the two files that decide how everything else is linted and
-	// mutated are themselves checked by nothing while `yarn lint:check` reports green.
-	//
-	// `marketplace-dev-public-resource` was the only repo that noticed: it carried a `.eslintrc.json`
-	// declaring exactly this intent — eslint:recommended plus simple-import-sort, node, `*.mjs` as
-	// module — and it never once ran. eslintrc was already inert under eslint 9's flat-config default,
-	// and eslint 10 (`^10.8.0` here) dropped the format outright, so the file was decoration. It is
-	// deleted; this block is what it meant to be, and it lives in all seven services and in
-	// marketplace-common because the gap was never specific to the one repo that documented it.
-	//
-	// `*.js` in flat config matches the config file's own directory only — it is NOT expanded to
-	// `**/*.js`. That is the whole reason this is safe: a repo-wide JS block would also pick up the
-	// minified browser bundle Qodana writes under .qodana/ and any leftover .stryker-tmp/ sandbox,
-	// which is precisely how marketplace-admin's config arrived at 1600 `no-undef` errors. Both paths are
-	// in the `ignores` above as well — belt and braces, since the glob alone already excludes them.
-	//
-	// No `globals` entry: neither root file references a node global. Every `process` and `module`
-	// that greps out of stryker.config.mjs across these repos is inside a comment. Add one here if
-	// that stops being true — do not reach for a wider glob.
-	{
-		files: ['*.js', '*.mjs', '*.cjs'],
-		languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
-		plugins: { 'simple-import-sort': simpleImportSort },
-		rules: {
-			...js.configs.recommended.rules,
-			'simple-import-sort/imports': 'error',
-			'simple-import-sort/exports': 'error'
-		}
-	},
-	// Neither setting the telemetry audit removed can come back by accident.
-	//
-	// Core `no-restricted-syntax`, in this file rather than in `@axiumine/eslint-config-be`: the shared
-	// package is a repo outside these sixteen and ships to unrelated consumers, so a Sentry-specific rule
-	// there would cost a publish, a version bump in ten dependents, and a rule everyone else carries for
-	// nothing. One block duplicated into ten repos is the cheaper half of that trade, and it follows the
-	// idiom the two blocks above already established.
-	//
-	// No `files` key on the first object, so the shared entries apply to every file eslint looks at
-	// here; the second one narrows to src/** and adds the write ban that belongs there alone. Three selectors for
-	// `rejectUnauthorized` because the defect actually in the tree was an assignment
-	// (`options.rejectUnauthorized = false`), not an object literal — a `Property`-only rule passes the
-	// exact code it exists to catch — and the computed form has a `key.value` where the plain one has a
-	// `key.name`. Two for `NODE_TLS_REJECT_UNAUTHORIZED` for the same reason one level up:
-	// `process.env.X` parses as an Identifier, `process.env['X']` as a Literal, and a rule carrying one
-	// misses the other.
-	{
-		rules: {
-			'no-restricted-syntax': ['error', ...REDIS_ONE_KEY_PER_DEL, ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
-		}
-	},
-	// The write ban rides on top of the shared entries rather than replacing them: a second config
-	// object naming the same rule discards the first one's options for every file it matches, so
-	// dropping the spread would silently un-ban `notes`, `waitApprov` and every Sentry selector inside
-	// src/** — the half of the repo they exist for.
-	{
-		files: ['src/**/*.mts'],
-		rules: {
-			'no-restricted-syntax': [
-				'error',
-				...REDIS_ONE_KEY_PER_DEL,
-				...RESTRICTED_SYNTAX,
-				...ITEMCATEGORY_NO_WRITE,
-				...DISABLED_NO_WRITE
-			]
-		}
-	},
-	// The itemCategory exemption rides on top of everything above rather than replacing it: a config
-	// object naming the same rule discards the previous options for every file it matches, so dropping
-	// either spread would silently un-ban the Sentry selectors and the `disabled*` write ban inside the
-	// one file this narrows.
-	{
-		files: ['src/lib/item/holdItemCategory.mts'],
-		rules: {
-			'no-restricted-syntax': [
-				'error',
-				...REDIS_ONE_KEY_PER_DEL,
-				...RESTRICTED_SYNTAX,
-				...DISABLED_NO_WRITE,
-				...ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD
-			]
-		}
-	},
-	// The seeding convention, stated where it can fail. Nothing else in this file names
-	// `no-restricted-imports`, so this object is the whole rule for the files it matches — add to
-	// `INTEGRATION_SEED_NO_MODEL` rather than declaring the rule a second time.
-	{
-		files: ['test/integration/**/*.mts'],
-		rules: {
-			'no-restricted-imports': ['error', INTEGRATION_SEED_NO_MODEL]
-		}
-	}
+  // `.stryker-tmp/**` and `reports/**` are build output, not sources. Stryker copies the whole
+  // repo into a sandbox under .stryker-tmp and only removes it on a clean exit — an interrupted
+  // run leaves one behind, and eslint then lints a second copy of every test file. Those copies
+  // carry `@ts-nocheck` and sit outside every tsconfig, so the lint fails with dozens of errors
+  // that point at a directory .gitignore already ignores.
+  // `.qodana/**` is what `--results-dir` writes: a SARIF file and a bundled HTML report whose
+  // minified browser JS is someone else's code. The root-JS block at the bottom of this file is
+  // scoped tightly enough that none of it is reachable anyway — this entry is the second lock.
+  { ignores: ['dist/**', 'coverage/**', '.stryker-tmp/**', 'reports/**', '.qodana/**'] },
+  ...eslintConfig,
+  {
+    files: ['test/**/*.mts', 'vitest.*.mts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: { ecmaVersion: 'latest', sourceType: 'module' }
+    },
+    plugins: sharedTsBlock.plugins,
+    // Prettier alone owns indentation. The shared TS block carries `indent: ['error', 'tab']`, which
+    // eslint-config-prettier switches off for src/** but which this block would switch back on for the
+    // tests, and `eslint --fix` would then rewrite prettier's two spaces into tabs.
+    rules: { ...sharedTsBlock.rules, indent: 'off' }
+  },
+  // The root-level JS config files — this file and stryker.config.mjs. The shared config's JS block
+  // is scoped to `src/**/*.{js,cjs,mjs}`, and a service whose sources are all .mts has no JS under
+  // src/ at all, so without this block the two files that decide how everything else is linted and
+  // mutated are themselves checked by nothing while `yarn lint:check` reports green.
+  //
+  // `marketplace-dev-public-resource` was the only repo that noticed: it carried a `.eslintrc.json`
+  // declaring exactly this intent — eslint:recommended plus simple-import-sort, node, `*.mjs` as
+  // module — and it never once ran. eslintrc was already inert under eslint 9's flat-config default,
+  // and eslint 10 (`^10.8.0` here) dropped the format outright, so the file was decoration. It is
+  // deleted; this block is what it meant to be, and it lives in all seven services and in
+  // marketplace-common because the gap was never specific to the one repo that documented it.
+  //
+  // `*.js` in flat config matches the config file's own directory only — it is NOT expanded to
+  // `**/*.js`. That is the whole reason this is safe: a repo-wide JS block would also pick up the
+  // minified browser bundle Qodana writes under .qodana/ and any leftover .stryker-tmp/ sandbox,
+  // which is precisely how marketplace-admin's config arrived at 1600 `no-undef` errors. Both paths are
+  // in the `ignores` above as well — belt and braces, since the glob alone already excludes them.
+  //
+  // No `globals` entry: neither root file references a node global. Every `process` and `module`
+  // that greps out of stryker.config.mjs across these repos is inside a comment. Add one here if
+  // that stops being true — do not reach for a wider glob.
+  {
+    files: ['*.js', '*.mjs', '*.cjs'],
+    languageOptions: { ecmaVersion: 'latest', sourceType: 'module' },
+    plugins: { 'simple-import-sort': simpleImportSort },
+    rules: {
+      ...js.configs.recommended.rules,
+      'simple-import-sort/imports': 'error',
+      'simple-import-sort/exports': 'error'
+    }
+  },
+  // Neither setting the telemetry audit removed can come back by accident.
+  //
+  // Core `no-restricted-syntax`, in this file rather than in `@axiumine/eslint-config-be`: the shared
+  // package is a repo outside these sixteen and ships to unrelated consumers, so a Sentry-specific rule
+  // there would cost a publish, a version bump in ten dependents, and a rule everyone else carries for
+  // nothing. One block duplicated into ten repos is the cheaper half of that trade, and it follows the
+  // idiom the two blocks above already established.
+  //
+  // No `files` key on the first object, so the shared entries apply to every file eslint looks at
+  // here; the second one narrows to src/** and adds the write ban that belongs there alone. Three selectors for
+  // `rejectUnauthorized` because the defect actually in the tree was an assignment
+  // (`options.rejectUnauthorized = false`), not an object literal — a `Property`-only rule passes the
+  // exact code it exists to catch — and the computed form has a `key.value` where the plain one has a
+  // `key.name`. Two for `NODE_TLS_REJECT_UNAUTHORIZED` for the same reason one level up:
+  // `process.env.X` parses as an Identifier, `process.env['X']` as a Literal, and a rule carrying one
+  // misses the other.
+  {
+    rules: {
+      'no-restricted-syntax': ['error', ...REDIS_ONE_KEY_PER_DEL, ...RESTRICTED_SYNTAX, ...ITEMCATEGORY_NO_WRITE]
+    }
+  },
+  // The write ban rides on top of the shared entries rather than replacing them: a second config
+  // object naming the same rule discards the first one's options for every file it matches, so
+  // dropping the spread would silently un-ban `notes`, `waitApprov` and every Sentry selector inside
+  // src/** — the half of the repo they exist for.
+  {
+    files: ['src/**/*.mts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...REDIS_ONE_KEY_PER_DEL,
+        ...RESTRICTED_SYNTAX,
+        ...ITEMCATEGORY_NO_WRITE,
+        ...DISABLED_NO_WRITE
+      ]
+    }
+  },
+  // The itemCategory exemption rides on top of everything above rather than replacing it: a config
+  // object naming the same rule discards the previous options for every file it matches, so dropping
+  // either spread would silently un-ban the Sentry selectors and the `disabled*` write ban inside the
+  // one file this narrows.
+  {
+    files: ['src/lib/item/holdItemCategory.mts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...REDIS_ONE_KEY_PER_DEL,
+        ...RESTRICTED_SYNTAX,
+        ...DISABLED_NO_WRITE,
+        ...ITEMCATEGORY_NO_WRITE_EXCEPT_HOLD
+      ]
+    }
+  },
+  // The seeding convention, stated where it can fail. Nothing else in this file names
+  // `no-restricted-imports`, so this object is the whole rule for the files it matches — add to
+  // `INTEGRATION_SEED_NO_MODEL` rather than declaring the rule a second time.
+  {
+    files: ['test/integration/**/*.mts'],
+    rules: {
+      'no-restricted-imports': ['error', INTEGRATION_SEED_NO_MODEL]
+    }
+  }
 ]

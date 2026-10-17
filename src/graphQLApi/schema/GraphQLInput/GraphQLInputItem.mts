@@ -36,16 +36,16 @@ import GraphQLUpload from 'graphql-upload/GraphQLUpload.mjs'
  * `false`, and the item stays a draft until someone publishes it on purpose.
  */
 export const GraphQLInputItem = new GraphQLInputObjectType({
-	name: 'GraphQLInputItem',
-	fields: () => ({
-		idCompany: { type: new GraphQLNonNull(GraphQLID) },
-		idCategory: { type: new GraphQLNonNull(GraphQLID) },
-		name: { type: new GraphQLNonNull(GraphQLString) },
-		description: { type: new GraphQLNonNull(GraphQLString) },
-		// Unique within the company, not globally: the route is `/shop/:slug/item/:itemSlug`, so the
-		// shop segment already disambiguates and one shop's catalogue never constrains another's.
-		slug: { type: new GraphQLNonNull(GraphQLString) },
-		// The picture, as bytes. Nullable — see the header — and consumed by `itemAdd` alone.
-		image: { type: GraphQLUpload }
-	})
+  name: 'GraphQLInputItem',
+  fields: () => ({
+    idCompany: { type: new GraphQLNonNull(GraphQLID) },
+    idCategory: { type: new GraphQLNonNull(GraphQLID) },
+    name: { type: new GraphQLNonNull(GraphQLString) },
+    description: { type: new GraphQLNonNull(GraphQLString) },
+    // Unique within the company, not globally: the route is `/shop/:slug/item/:itemSlug`, so the
+    // shop segment already disambiguates and one shop's catalogue never constrains another's.
+    slug: { type: new GraphQLNonNull(GraphQLString) },
+    // The picture, as bytes. Nullable — see the header — and consumed by `itemAdd` alone.
+    image: { type: GraphQLUpload }
+  })
 })

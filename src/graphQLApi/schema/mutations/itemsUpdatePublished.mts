@@ -7,8 +7,8 @@ import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLList, GraphQLNonNull } 
 import { Types } from 'mongoose'
 
 interface IArgs {
-	_ids: Types.ObjectId[]
-	published: boolean
+  _ids: Types.ObjectId[]
+  published: boolean
 }
 
 /**
@@ -51,31 +51,31 @@ const uniqueIds = (ids: Types.ObjectId[]) => [...new Map(ids.map((id) => [String
  * owner asking for nothing, and a silent success would look like the flag had been written.
  */
 export const itemsUpdatePublished = {
-	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'publishes or unpublishes several items at once',
-	args: {
-		_ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
-		published: { type: new GraphQLNonNull(GraphQLBoolean) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		const itemIds = uniqueIds(args._ids)
+  type: new GraphQLNonNull(GraphQLBoolean),
+  description: 'publishes or unpublishes several items at once',
+  args: {
+    _ids: { type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLID))) },
+    published: { type: new GraphQLNonNull(GraphQLBoolean) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    const itemIds = uniqueIds(args._ids)
 
-		if (itemIds.length === 0) {
-			throwErrorWrongUserInput('_ids: at least one item is required')
-		}
+    if (itemIds.length === 0) {
+      throwErrorWrongUserInput('_ids: at least one item is required')
+    }
 
-		if (itemIds.length > MAX_ITEMS_PER_CALL) {
-			throwErrorWrongUserInput(`_ids: at most ${MAX_ITEMS_PER_CALL} items per call`)
-		}
+    if (itemIds.length > MAX_ITEMS_PER_CALL) {
+      throwErrorWrongUserInput(`_ids: at most ${MAX_ITEMS_PER_CALL} items per call`)
+    }
 
-		await throwIfShopOwnerDontOwnAllItems(ctx.state.user._id, itemIds)
+    await throwIfShopOwnerDontOwnAllItems(ctx.state.user._id, itemIds)
 
-		try {
-			await funItemsUpdatePublished(itemIds, ctx.state.user._id, args.published)
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		}
+    try {
+      await funItemsUpdatePublished(itemIds, ctx.state.user._id, args.published)
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    }
 
-		return true
-	}
+    return true
+  }
 }

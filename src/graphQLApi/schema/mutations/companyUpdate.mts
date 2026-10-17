@@ -8,8 +8,8 @@ import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLNonNull } from 'graphql
 import { Types } from 'mongoose'
 
 interface IArgs {
-	_id: Types.ObjectId
-	company: ICompanyInput
+  _id: Types.ObjectId
+  company: ICompanyInput
 }
 
 /**
@@ -20,21 +20,21 @@ interface IArgs {
  * untouched — only a genuine driver failure downstream of it is turned into anything.
  */
 export const companyUpdate = {
-	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'update company',
-	args: {
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		company: { type: new GraphQLNonNull(GraphQLInputCompany) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args._id)
+  type: new GraphQLNonNull(GraphQLBoolean),
+  description: 'update company',
+  args: {
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    company: { type: new GraphQLNonNull(GraphQLInputCompany) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, args._id)
 
-		try {
-			await funCompanyUpdate(args._id, ctx.state.user._id, validateCompany(args.company))
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		}
+    try {
+      await funCompanyUpdate(args._id, ctx.state.user._id, validateCompany(args.company))
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    }
 
-		return true
-	}
+    return true
+  }
 }

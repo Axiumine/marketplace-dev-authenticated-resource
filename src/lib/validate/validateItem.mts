@@ -25,9 +25,9 @@ const MAX_SLUG = 160
  * `$unset` half to build.
  */
 export const validateItem = (item: IItemUpdate): IItemUpdate => ({
-	idCompany: item.idCompany,
-	idCategory: item.idCategory,
-	name: requiredText(item.name, 'item.name', MAX_NAME),
-	description: requiredText(item.description, 'item.description', MAX_DESCRIPTION),
-	slug: requiredSlug(item.slug, 'item.slug', MAX_SLUG)
+  idCompany: item.idCompany,
+  idCategory: item.idCategory,
+  name: requiredText(item.name, 'item.name', MAX_NAME),
+  description: requiredText(item.description, 'item.description', MAX_DESCRIPTION),
+  slug: requiredSlug(item.slug, 'item.slug', MAX_SLUG)
 })

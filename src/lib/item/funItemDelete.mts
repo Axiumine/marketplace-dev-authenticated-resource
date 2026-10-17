@@ -16,12 +16,12 @@ import { trusted, Types } from 'mongoose'
  * `idCompany` clause is the same defence in depth `funItemUpdate` carries.
  */
 export async function funItemDelete(itemId: Types.ObjectId, shopOwnerId: Types.ObjectId) {
-	const ret = await Item.updateOne(
-		{ _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
-		{ $set: { deleted: Date.now() } }
-	).exec()
+  const ret = await Item.updateOne(
+    { _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
+    { $set: { deleted: Date.now() } }
+  ).exec()
 
-	if (ret.matchedCount !== 1) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== 1) {
+    throwInternalError()
+  }
 }

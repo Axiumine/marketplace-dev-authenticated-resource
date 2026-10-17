@@ -20,7 +20,7 @@ const DAY_MS = 86_400_000
 
 /** The one thing this needs from the `NodeClam` `initClamScan()` hands back. */
 export interface IClamVersionReader {
-	getVersion: () => Promise<string>
+  getVersion: () => Promise<string>
 }
 
 /**
@@ -30,9 +30,9 @@ export interface IClamVersionReader {
  * `IScanVirusResult` in koa-utils carries one.
  */
 export interface IClamSignatureReport {
-	state: 'fresh' | 'stale' | 'unreadable' | 'unreachable'
-	alerted: boolean
-	detail: string
+  state: 'fresh' | 'stale' | 'unreadable' | 'unreachable'
+  alerted: boolean
+  detail: string
 }
 
 /**
@@ -45,18 +45,18 @@ export interface IClamSignatureReport {
  * duration and, in a test run, leaks into the next test.
  */
 const answerWithin = async (work: Promise<string>, timeoutMs: number): Promise<string> => {
-	let timer: NodeJS.Timeout | undefined
+  let timer: NodeJS.Timeout | undefined
 
-	try {
-		return await Promise.race([
-			work,
-			new Promise<never>((_resolve, reject) => {
-				timer = setTimeout(() => reject(new Error(`clamd did not answer VERSION within ${timeoutMs}ms`)), timeoutMs)
-			})
-		])
-	} finally {
-		clearTimeout(timer)
-	}
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`clamd did not answer VERSION within ${timeoutMs}ms`)), timeoutMs)
+      })
+    ])
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 /**
@@ -69,34 +69,34 @@ const answerWithin = async (work: Promise<string>, timeoutMs: number): Promise<s
  * past a missed update and well short of alerting on an ordinary weekend.
  */
 export const reportClamSignatureAge = async (
-	clam: IClamVersionReader,
-	{ now = Date.now(), maxAgeMs = 7 * DAY_MS, timeoutMs = 5000 }: { now?: number; maxAgeMs?: number; timeoutMs?: number } = {}
+  clam: IClamVersionReader,
+  { now = Date.now(), maxAgeMs = 7 * DAY_MS, timeoutMs = 5000 }: { now?: number; maxAgeMs?: number; timeoutMs?: number } = {}
 ): Promise<IClamSignatureReport> => {
-	let reply: string
+  let reply: string
 
-	try {
-		reply = await answerWithin(clam.getVersion(), timeoutMs)
-	} catch (e) {
-		const detail = 'clamd is connected but did not report its version, so the signature age is unknown'
+  try {
+    reply = await answerWithin(clam.getVersion(), timeoutMs)
+  } catch (e) {
+    const detail = 'clamd is connected but did not report its version, so the signature age is unknown'
 
-		Sentry.captureException(e, { extra: { detail } })
-		console.warn(`[clamav] ${detail}`)
+    Sentry.captureException(e, { extra: { detail } })
+    console.warn(`[clamav] ${detail}`)
 
-		return { state: 'unreachable', alerted: true, detail }
-	}
+    return { state: 'unreachable', alerted: true, detail }
+  }
 
-	const verdict = clamSignatureFreshness(reply, now, maxAgeMs)
+  const verdict = clamSignatureFreshness(reply, now, maxAgeMs)
 
-	if (verdict.state === 'fresh')
-		return { state: 'fresh', alerted: false, detail: `signatures built ${verdict.builtAt.toISOString()}` }
+  if (verdict.state === 'fresh')
+    return { state: 'fresh', alerted: false, detail: `signatures built ${verdict.builtAt.toISOString()}` }
 
-	const detail =
-		verdict.state === 'stale'
-			? `virus signatures are ${Math.floor(verdict.ageMs / DAY_MS)} days old, past the ${Math.floor(maxAgeMs / DAY_MS)} day limit`
-			: `clamd answered a version string this cannot read: ${verdict.reply}`
+  const detail =
+    verdict.state === 'stale'
+      ? `virus signatures are ${Math.floor(verdict.ageMs / DAY_MS)} days old, past the ${Math.floor(maxAgeMs / DAY_MS)} day limit`
+      : `clamd answered a version string this cannot read: ${verdict.reply}`
 
-	Sentry.captureMessage(`[clamav] ${detail}`, 'warning')
-	console.warn(`[clamav] ${detail}`)
+  Sentry.captureMessage(`[clamav] ${detail}`, 'warning')
+  console.warn(`[clamav] ${detail}`)
 
-	return { state: verdict.state, alerted: true, detail }
+  return { state: verdict.state, alerted: true, detail }
 }

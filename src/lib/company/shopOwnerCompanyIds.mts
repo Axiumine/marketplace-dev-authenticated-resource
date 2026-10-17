@@ -21,10 +21,10 @@ import { ClientSession, trusted, Types } from 'mongoose'
  * unconditional and there is no branch here for a later reader to get wrong.
  */
 export async function shopOwnerCompanyIds(shopOwnerId: Types.ObjectId, session: ClientSession | null = null) {
-	const companies = await Company.find({ idShopOwner: shopOwnerId, deleted: trusted({ $exists: false }) }, { _id: 1 })
-		.session(session)
-		.lean()
-		.exec()
+  const companies = await Company.find({ idShopOwner: shopOwnerId, deleted: trusted({ $exists: false }) }, { _id: 1 })
+    .session(session)
+    .lean()
+    .exec()
 
-	return companies.map(({ _id }) => _id)
+  return companies.map(({ _id }) => _id)
 }

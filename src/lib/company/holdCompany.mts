@@ -35,15 +35,15 @@ import { ClientSession, trusted, Types } from 'mongoose'
  * meantime — a race, not a permission the caller lacked.
  */
 export async function holdCompany(idCompany: Types.ObjectId, session: ClientSession) {
-	const held = await Company.findOneAndUpdate(
-		{ _id: idCompany, deleted: trusted({ $exists: false }) },
-		{ $inc: { __v: 1 } },
-		{ projection: { _id: 1 } }
-	)
-		.session(session)
-		.lean()
+  const held = await Company.findOneAndUpdate(
+    { _id: idCompany, deleted: trusted({ $exists: false }) },
+    { $inc: { __v: 1 } },
+    { projection: { _id: 1 } }
+  )
+    .session(session)
+    .lean()
 
-	if (held === null) {
-		throwNotFoundError()
-	}
+  if (held === null) {
+    throwNotFoundError()
+  }
 }

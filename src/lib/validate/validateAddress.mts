@@ -36,17 +36,17 @@ export type IAddressInput = Omit<ICompanyAddress, 'position'> & { position: { co
  * is a document that fails validation for a reason no owner typed.
  */
 export const validateAddress = (address: IAddressInput, prefix: string): ICompanyAddress => ({
-	street: requiredText(address.street, `${prefix}.street`, MAX_ADDRESS),
-	postalCode: textWithFormat(address.postalCode, `${prefix}.postalCode`, SHAPE_POSTAL_CODE, 'the postal code is 5 digits'),
-	city: requiredText(address.city, `${prefix}.city`, MAX_CITY),
-	province: textWithFormat(
-		address.province,
-		`${prefix}.province`,
-		SHAPE_PROVINCE,
-		'the province is the 2-letter code'
-	).toUpperCase(),
-	position: {
-		type: POSITION_TYPE,
-		coordinates: coordinate(address.position.coordinates, `${prefix}.position.coordinates`)
-	}
+  street: requiredText(address.street, `${prefix}.street`, MAX_ADDRESS),
+  postalCode: textWithFormat(address.postalCode, `${prefix}.postalCode`, SHAPE_POSTAL_CODE, 'the postal code is 5 digits'),
+  city: requiredText(address.city, `${prefix}.city`, MAX_CITY),
+  province: textWithFormat(
+    address.province,
+    `${prefix}.province`,
+    SHAPE_PROVINCE,
+    'the province is the 2-letter code'
+  ).toUpperCase(),
+  position: {
+    type: POSITION_TYPE,
+    coordinates: coordinate(address.position.coordinates, `${prefix}.position.coordinates`)
+  }
 })

@@ -22,7 +22,7 @@ import mongoose, { Types } from 'mongoose'
  * `Upload` is a stream, not a value a document can hold. This is the only place the two meet.
  */
 interface IArgs {
-	item: IItemUpdate & { image?: Promise<IFileUpload> }
+  item: IItemUpdate & { image?: Promise<IFileUpload> }
 }
 
 /**
@@ -92,66 +92,66 @@ interface IArgs {
  * id is a value this function already holds.
  */
 export const itemAdd = {
-	type: new GraphQLNonNull(OnlyIdType),
-	description: 'add item',
-	args: {
-		item: { type: new GraphQLNonNull(GraphQLInputItem) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		// `image` is pulled out of the object rather than spread with the rest: what arrives under that
-		// key is a promise of a stream, and the document takes a file name. Validated *and* normalised
-		// before either guard runs — a malformed name or slug is a 400 that costs nothing to answer,
-		// and it leaks no more about which companies or categories exist than the guards' own 403/404 do.
-		const { image, ...card } = args.item
-		const validated = validateItem(card)
+  type: new GraphQLNonNull(OnlyIdType),
+  description: 'add item',
+  args: {
+    item: { type: new GraphQLNonNull(GraphQLInputItem) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    // `image` is pulled out of the object rather than spread with the rest: what arrives under that
+    // key is a promise of a stream, and the document takes a file name. Validated *and* normalised
+    // before either guard runs — a malformed name or slug is a 400 that costs nothing to answer,
+    // and it leaks no more about which companies or categories exist than the guards' own 403/404 do.
+    const { image, ...card } = args.item
+    const validated = validateItem(card)
 
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, validated.idCompany)
-		await throwIfItemCategoryMissing(validated.idCategory)
+    await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, validated.idCompany)
+    await throwIfItemCategoryMissing(validated.idCategory)
 
-		const _id = new Types.ObjectId()
-		const session = await mongoose.startSession()
+    const _id = new Types.ObjectId()
+    const session = await mongoose.startSession()
 
-		try {
-			// Before the insert, and after both guards: an upload is expensive — it writes a file, scans it
-			// with ClamAV and re-encodes it — and a caller who does not own the shop must not get any of
-			// that out of a request that was going to be refused.
-			const stored = image ? await storeItemImage(image, _id) : null
+    try {
+      // Before the insert, and after both guards: an upload is expensive — it writes a file, scans it
+      // with ClamAV and re-encodes it — and a caller who does not own the shop must not get any of
+      // that out of a request that was going to be refused.
+      const stored = image ? await storeItemImage(image, _id) : null
 
-			// `published: false` is stamped here rather than taken from the input: publishing is
-			// `itemUpdatePublished`, a second call the owner makes on purpose. A new item is a draft.
-			//
-			// `image` is `undefined` when there is no upload, which mongoose drops — the document is written
-			// without the path, which is what the validator's optional `image` means.
-			const newItem: IItemSchema = {
-				_id,
-				...validated,
-				published: false,
-				image: stored?.fileName
-			}
+      // `published: false` is stamped here rather than taken from the input: publishing is
+      // `itemUpdatePublished`, a second call the owner makes on purpose. A new item is a draft.
+      //
+      // `image` is `undefined` when there is no upload, which mongoose drops — the document is written
+      // without the path, which is what the validator's optional `image` means.
+      const newItem: IItemSchema = {
+        _id,
+        ...validated,
+        published: false,
+        image: stored?.fileName
+      }
 
-			await session.withTransaction(async () => {
-				await holdItemCategory(validated.idCategory, session)
+      await session.withTransaction(async () => {
+        await holdItemCategory(validated.idCategory, session)
 
-				await Item.create([newItem], { session })
-			})
+        await Item.create([newItem], { session })
+      })
 
-			// Only now, with the document committed, does the picture become publicly reachable. The two
-			// path segments are fixed by the server: `item` is a literal, and `idCompany` is an id
-			// `throwIfShopOwnerDontOwnCompany` has just matched against a real company of this session —
-			// a malformed one never gets this far, and `moveFileStaticDomain` re-checks both for
-			// traversal regardless.
-			if (stored) {
-				// ⚠️ `destBaseName`, never `fileName`: the move appends the temp file's own extension to
-				// whatever it is handed, so the second would land as `<_id>.webp.webp`. See
-				// `IStoredItemImage`.
-				await moveFileStaticDomain(stored.tempFile, 'item', String(validated.idCompany), stored.destBaseName)
-			}
+      // Only now, with the document committed, does the picture become publicly reachable. The two
+      // path segments are fixed by the server: `item` is a literal, and `idCompany` is an id
+      // `throwIfShopOwnerDontOwnCompany` has just matched against a real company of this session —
+      // a malformed one never gets this far, and `moveFileStaticDomain` re-checks both for
+      // traversal regardless.
+      if (stored) {
+        // ⚠️ `destBaseName`, never `fileName`: the move appends the temp file's own extension to
+        // whatever it is handed, so the second would land as `<_id>.webp.webp`. See
+        // `IStoredItemImage`.
+        await moveFileStaticDomain(stored.tempFile, 'item', String(validated.idCompany), stored.destBaseName)
+      }
 
-			return { _id }
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		} finally {
-			await session.endSession()
-		}
-	}
+      return { _id }
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    } finally {
+      await session.endSession()
+    }
+  }
 }

@@ -21,19 +21,19 @@ import { start } from '../../src/index.mts'
 
 /** The raw driver handle — only defined once start() has connected. */
 export function db() {
-	return mongoose.connection.db!
+  return mongoose.connection.db!
 }
 
 /** Boot the real server on an ephemeral port and hand back its handle plus the base URL. */
 export async function bootServer() {
-	const server = await start()
-	if (!server) throw new Error('server failed to start against the real Redis cluster / MongoDB / clamd')
+  const server = await start()
+  if (!server) throw new Error('server failed to start against the real Redis cluster / MongoDB / clamd')
 
-	const { httpServer } = server
-	const address = httpServer.address() as AddressInfo | null
-	if (!address || typeof address === 'string') throw new Error('no TCP address on the booted server')
+  const { httpServer } = server
+  const address = httpServer.address() as AddressInfo | null
+  if (!address || typeof address === 'string') throw new Error('no TCP address on the booted server')
 
-	return { httpServer, base: `http://127.0.0.1:${address.port}` }
+  return { httpServer, base: `http://127.0.0.1:${address.port}` }
 }
 
 /**
@@ -44,18 +44,18 @@ export async function bootServer() {
  * sits in the cluster for its whole TTL, which for a refresh session is 90 days.
  */
 export async function drainSafely(what: string, remove: () => Promise<unknown>) {
-	try {
-		await remove()
-	} catch (error) {
-		console.error(`[afterAll] cleanup failed for ${what}:`, error)
-	}
+  try {
+    await remove()
+  } catch (error) {
+    console.error(`[afterAll] cleanup failed for ${what}:`, error)
+  }
 }
 
 /** Delete every id this run wrote to one collection, one document at a time. */
 export async function drainDocuments(collection: string, ids: mongoose.Types.ObjectId[]) {
-	for (const _id of ids) {
-		await drainSafely(`${collection} ${_id.toString()}`, () => db().collection(collection).deleteOne({ _id }))
-	}
+  for (const _id of ids) {
+    await drainSafely(`${collection} ${_id.toString()}`, () => db().collection(collection).deleteOne({ _id }))
+  }
 }
 
 /**
@@ -68,23 +68,23 @@ export async function drainDocuments(collection: string, ids: mongoose.Types.Obj
  * `shopOwners` are optional: not every suite here writes one.
  */
 export async function drainAndClose(
-	httpServer: Server,
-	seeded: {
-		companies: mongoose.Types.ObjectId[]
-		items?: mongoose.Types.ObjectId[]
-		shopOwners?: mongoose.Types.ObjectId[]
-		keys: string[]
-	}
+  httpServer: Server,
+  seeded: {
+    companies: mongoose.Types.ObjectId[]
+    items?: mongoose.Types.ObjectId[]
+    shopOwners?: mongoose.Types.ObjectId[]
+    keys: string[]
+  }
 ) {
-	await drainDocuments('item', seeded.items ?? [])
-	await drainDocuments('company', seeded.companies)
-	await drainDocuments('shopOwner', seeded.shopOwners ?? [])
-	// One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
-	for (const key of seeded.keys) {
-		await drainSafely(key, () => redisClient.del(key))
-	}
+  await drainDocuments('item', seeded.items ?? [])
+  await drainDocuments('company', seeded.companies)
+  await drainDocuments('shopOwner', seeded.shopOwners ?? [])
+  // One del per key — this is a cluster, so a multi-key del would CROSSSLOT.
+  for (const key of seeded.keys) {
+    await drainSafely(key, () => redisClient.del(key))
+  }
 
-	await new Promise<void>((resolve) => httpServer.close(() => resolve()))
-	await redisClient.close()
-	await mongoose.disconnect()
+  await new Promise<void>((resolve) => httpServer.close(() => resolve()))
+  await redisClient.close()
+  await mongoose.disconnect()
 }

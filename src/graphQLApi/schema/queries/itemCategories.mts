@@ -20,11 +20,11 @@ import { trusted } from 'mongoose'
  * between calls rather than left to whatever the storage engine returns.
  */
 export const itemCategories = {
-	type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLItemCategory))),
-	description: 'Get item categories',
-	async resolve() {
-		return ItemCategory.find({ deleted: trusted({ $exists: false }) })
-			.sort({ position: 1, _id: 1 })
-			.lean()
-	}
+  type: new GraphQLNonNull(new GraphQLList(new GraphQLNonNull(GraphQLItemCategory))),
+  description: 'Get item categories',
+  async resolve() {
+    return ItemCategory.find({ deleted: trusted({ $exists: false }) })
+      .sort({ position: 1, _id: 1 })
+      .lean()
+  }
 }

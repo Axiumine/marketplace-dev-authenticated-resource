@@ -9,7 +9,7 @@ import { GraphQLError, GraphQLNonNull } from 'graphql'
 import { Types } from 'mongoose'
 
 interface IArgs {
-	company: ICompanyInput
+  company: ICompanyInput
 }
 
 /**
@@ -24,37 +24,37 @@ interface IArgs {
  * produced.
  */
 export const companyAdd = {
-	type: new GraphQLNonNull(OnlyIdType),
-	description: 'add company',
-	args: {
-		company: { type: new GraphQLNonNull(GraphQLInputCompany) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		// Validated *and* normalised before the write, never after — a malformed legalName or an
-		// out-of-range VAT number has to come back as the 400 throwErrorWrongUserInput raises, not
-		// whatever shape MongoDB's own $jsonSchema rejection happens to take. The five optional fields
-		// come back undefined when blank rather than omitted, which is harmless here — an insert never
-		// sets a key holding undefined — and is what lets funCompanyUpdate tell "cleared" from "never
-		// sent" on the save path this same validator feeds.
-		const validated = validateCompany(args.company)
+  type: new GraphQLNonNull(OnlyIdType),
+  description: 'add company',
+  args: {
+    company: { type: new GraphQLNonNull(GraphQLInputCompany) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    // Validated *and* normalised before the write, never after — a malformed legalName or an
+    // out-of-range VAT number has to come back as the 400 throwErrorWrongUserInput raises, not
+    // whatever shape MongoDB's own $jsonSchema rejection happens to take. The five optional fields
+    // come back undefined when blank rather than omitted, which is harmless here — an insert never
+    // sets a key holding undefined — and is what lets funCompanyUpdate tell "cleared" from "never
+    // sent" on the save path this same validator feeds.
+    const validated = validateCompany(args.company)
 
-		// `published: false` is stamped here rather than taken from the input: publishing is
-		// `companyUpdatePublished`. It is also the only value the validator would accept from a shop
-		// this new — `published: true` needs a `slug` and a `publicName`, both optional on the input.
-		const newCompany: ICompanySchema = {
-			_id: new Types.ObjectId(),
-			idShopOwner: ctx.state.user._id,
-			...validated,
-			published: false
-		}
+    // `published: false` is stamped here rather than taken from the input: publishing is
+    // `companyUpdatePublished`. It is also the only value the validator would accept from a shop
+    // this new — `published: true` needs a `slug` and a `publicName`, both optional on the input.
+    const newCompany: ICompanySchema = {
+      _id: new Types.ObjectId(),
+      idShopOwner: ctx.state.user._id,
+      ...validated,
+      published: false
+    }
 
-		// `return await`, not `return`: without the await the promise escapes the try, so the catch
-		// below can never run and a duplicate VAT number would surface as an unhandled rejection
-		// instead of the 409 tryCatchRethrow makes of it.
-		try {
-			return await Company.create(newCompany)
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		}
-	}
+    // `return await`, not `return`: without the await the promise escapes the try, so the catch
+    // below can never run and a duplicate VAT number would surface as an unhandled rejection
+    // instead of the 409 tryCatchRethrow makes of it.
+    try {
+      return await Company.create(newCompany)
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    }
+  }
 }

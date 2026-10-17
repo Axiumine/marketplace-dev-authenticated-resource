@@ -26,12 +26,12 @@ import { trusted, Types } from 'mongoose'
  * anything less means the set changed underneath and the owner should be told the call failed.
  */
 export async function funItemsUpdatePublished(itemIds: Types.ObjectId[], shopOwnerId: Types.ObjectId, published: boolean) {
-	const ret = await Item.updateMany(
-		{ _id: trusted({ $in: itemIds }), idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
-		{ $set: { published } }
-	).exec()
+  const ret = await Item.updateMany(
+    { _id: trusted({ $in: itemIds }), idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) }) },
+    { $set: { published } }
+  ).exec()
 
-	if (ret.matchedCount !== itemIds.length) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== itemIds.length) {
+    throwInternalError()
+  }
 }

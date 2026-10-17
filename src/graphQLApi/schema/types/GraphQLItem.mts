@@ -26,14 +26,14 @@ import { GraphQLBoolean, GraphQLID, GraphQLNonNull, GraphQLObjectType, GraphQLSt
  * `<static>/item/<idCompany>/<image>`, and both segments it needs are on this same type.
  */
 export const GraphQLItem = new GraphQLObjectType({
-	name: 'GraphQLItem',
-	fields: () => ({
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		idCompany: { type: new GraphQLNonNull(GraphQLID) },
-		idCategory: { type: new GraphQLNonNull(GraphQLID) },
-		...GraphQLItemFrag,
-		published: { type: new GraphQLNonNull(GraphQLBoolean) },
-		// Nullable, and a file name rather than a URL — see the header.
-		image: { type: GraphQLString }
-	})
+  name: 'GraphQLItem',
+  fields: () => ({
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    idCompany: { type: new GraphQLNonNull(GraphQLID) },
+    idCategory: { type: new GraphQLNonNull(GraphQLID) },
+    ...GraphQLItemFrag,
+    published: { type: new GraphQLNonNull(GraphQLBoolean) },
+    // Nullable, and a file name rather than a URL — see the header.
+    image: { type: GraphQLString }
+  })
 })

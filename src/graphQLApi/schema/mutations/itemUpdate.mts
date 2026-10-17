@@ -12,8 +12,8 @@ import { GraphQLBoolean, GraphQLError, GraphQLID, GraphQLNonNull } from 'graphql
 import mongoose, { Types } from 'mongoose'
 
 interface IArgs {
-	_id: Types.ObjectId
-	item: IItemUpdate
+  _id: Types.ObjectId
+  item: IItemUpdate
 }
 
 /**
@@ -61,43 +61,43 @@ interface IArgs {
  * the new name is the same one the old file already carried, and there is nothing to parse.
  */
 export const itemUpdate = {
-	type: new GraphQLNonNull(GraphQLBoolean),
-	description: 'update item',
-	args: {
-		_id: { type: new GraphQLNonNull(GraphQLID) },
-		item: { type: new GraphQLNonNull(GraphQLInputItem) }
-	},
-	async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
-		const item = validateItem(args.item)
+  type: new GraphQLNonNull(GraphQLBoolean),
+  description: 'update item',
+  args: {
+    _id: { type: new GraphQLNonNull(GraphQLID) },
+    item: { type: new GraphQLNonNull(GraphQLInputItem) }
+  },
+  async resolve(_: unknown, args: IArgs, ctx: IContextShopOwnerAuthenticatedResource) {
+    const item = validateItem(args.item)
 
-		await throwIfShopOwnerDontOwnItem(ctx.state.user._id, args._id)
-		await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, item.idCompany)
+    await throwIfShopOwnerDontOwnItem(ctx.state.user._id, args._id)
+    await throwIfShopOwnerDontOwnCompany(ctx.state.user._id, item.idCompany)
 
-		const session = await mongoose.startSession()
-		let before: IItemUpdateBefore | undefined
+    const session = await mongoose.startSession()
+    let before: IItemUpdateBefore | undefined
 
-		try {
-			await session.withTransaction(async () => {
-				await holdItemCategory(item.idCategory, session)
-				await holdCompany(item.idCompany, session)
+    try {
+      await session.withTransaction(async () => {
+        await holdItemCategory(item.idCategory, session)
+        await holdCompany(item.idCompany, session)
 
-				before = await funItemUpdate(args._id, ctx.state.user._id, item, session)
-			})
+        before = await funItemUpdate(args._id, ctx.state.user._id, item, session)
+      })
 
-			if (before && before.image && String(before.idCompany) !== String(item.idCompany)) {
-				await moveFileStaticDomain(
-					`${process.env.STATIC_FOLDER}/item/${String(before.idCompany)}/${before.image}`,
-					'item',
-					String(item.idCompany),
-					String(args._id)
-				)
-			}
-		} catch (e) {
-			tryCatchRethrow(e as GraphQLError | Error)
-		} finally {
-			await session.endSession()
-		}
+      if (before && before.image && String(before.idCompany) !== String(item.idCompany)) {
+        await moveFileStaticDomain(
+          `${process.env.STATIC_FOLDER}/item/${String(before.idCompany)}/${before.image}`,
+          'item',
+          String(item.idCompany),
+          String(args._id)
+        )
+      }
+    } catch (e) {
+      tryCatchRethrow(e as GraphQLError | Error)
+    } finally {
+      await session.endSession()
+    }
 
-		return true
-	}
+    return true
+  }
 }

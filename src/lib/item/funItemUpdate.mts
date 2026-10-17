@@ -35,8 +35,8 @@ export type IItemUpdate = Omit<IItemSchema, '_id' | '__v' | 'deleted' | 'publish
  * that reads this.
  */
 export interface IItemUpdateBefore {
-	idCompany: Types.ObjectId
-	image: string | undefined
+  idCompany: Types.ObjectId
+  image: string | undefined
 }
 
 /**
@@ -77,29 +77,29 @@ export interface IItemUpdateBefore {
  * others.
  */
 export async function funItemUpdate(
-	itemId: Types.ObjectId,
-	shopOwnerId: Types.ObjectId,
-	data: IItemUpdate,
-	session: ClientSession
+  itemId: Types.ObjectId,
+  shopOwnerId: Types.ObjectId,
+  data: IItemUpdate,
+  session: ClientSession
 ): Promise<IItemUpdateBefore> {
-	const ownerScope = { _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId, session) }) }
+  const ownerScope = { _id: itemId, idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId, session) }) }
 
-	const before = await Item.findOne(ownerScope, { idCompany: 1, image: 1 }).session(session).lean()
+  const before = await Item.findOne(ownerScope, { idCompany: 1, image: 1 }).session(session).lean()
 
-	if (before === null) {
-		throwInternalError()
-	}
+  if (before === null) {
+    throwInternalError()
+  }
 
-	// A copy with the key removed, rather than a rest-destructure: the discarded half of
-	// `const { image, ...card } =` is a binding nothing reads, and `no-unused-vars` is an error here.
-	const card: Partial<IItemUpdate & { image?: unknown }> = { ...data }
-	delete card.image
+  // A copy with the key removed, rather than a rest-destructure: the discarded half of
+  // `const { image, ...card } =` is a binding nothing reads, and `no-unused-vars` is an error here.
+  const card: Partial<IItemUpdate & { image?: unknown }> = { ...data }
+  delete card.image
 
-	const ret = await Item.updateOne(ownerScope, { $set: card }).session(session).exec()
+  const ret = await Item.updateOne(ownerScope, { $set: card }).session(session).exec()
 
-	if (ret.matchedCount !== 1) {
-		throwInternalError()
-	}
+  if (ret.matchedCount !== 1) {
+    throwInternalError()
+  }
 
-	return { idCompany: before.idCompany, image: before.image }
+  return { idCompany: before.idCompany, image: before.image }
 }

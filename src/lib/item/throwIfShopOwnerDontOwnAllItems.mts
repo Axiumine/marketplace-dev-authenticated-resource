@@ -28,13 +28,13 @@ import { trusted, Types } from 'mongoose'
  * a literal and match nothing.
  */
 export async function throwIfShopOwnerDontOwnAllItems(shopOwnerId: Types.ObjectId, itemIds: Types.ObjectId[]) {
-	const found = await Item.countDocuments({
-		_id: trusted({ $in: itemIds }),
-		deleted: trusted({ $exists: false }),
-		idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) })
-	}).lean()
+  const found = await Item.countDocuments({
+    _id: trusted({ $in: itemIds }),
+    deleted: trusted({ $exists: false }),
+    idCompany: trusted({ $in: await shopOwnerCompanyIds(shopOwnerId) })
+  }).lean()
 
-	if (found !== itemIds.length) {
-		throw throwForbiddenError()
-	}
+  if (found !== itemIds.length) {
+    throw throwForbiddenError()
+  }
 }

@@ -3,14 +3,14 @@ import { IRedisDataShopOwnerForNode } from '@axiumine/marketplace-common/others/
 import { Types } from 'mongoose'
 
 export function makeAuthCtx(redData: IRedisDataShopOwner): IRedisDataShopOwnerForNode {
-	let dt: IRedisDataShopOwnerForNode = {
-		_id: new Types.ObjectId(redData._id),
-		email: redData.email
-	}
+  let dt: IRedisDataShopOwnerForNode = {
+    _id: new Types.ObjectId(redData._id),
+    email: redData.email
+  }
 
-	if (typeof redData.onboardingStep !== 'undefined') {
-		dt.onboardingStep = redData.onboardingStep
-	}
+  if (typeof redData.onboardingStep !== 'undefined') {
+    dt.onboardingStep = redData.onboardingStep
+  }
 
-	return dt
+  return dt
 }

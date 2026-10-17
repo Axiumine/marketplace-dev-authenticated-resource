@@ -30,5 +30,5 @@ export type Resolver = { resolve: (...a: never[]) => unknown }
  * suites without becoming one.
  */
 export function run(mutation: Resolver, args: unknown): unknown {
-	return mutation.resolve(null as never, args as never, ctx as never)
+  return mutation.resolve(null as never, args as never, ctx as never)
 }

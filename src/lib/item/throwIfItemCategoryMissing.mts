@@ -27,12 +27,12 @@ import { trusted, Types } from 'mongoose'
  * under one would produce an item no listing can reach.
  */
 export async function throwIfItemCategoryMissing(categoryId: Types.ObjectId) {
-	const found = await ItemCategory.countDocuments({
-		_id: categoryId,
-		deleted: trusted({ $exists: false })
-	}).lean()
+  const found = await ItemCategory.countDocuments({
+    _id: categoryId,
+    deleted: trusted({ $exists: false })
+  }).lean()
 
-	if (found === 0) {
-		throw throwNotFoundError()
-	}
+  if (found === 0) {
+    throw throwNotFoundError()
+  }
 }
