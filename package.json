@@ -57,7 +57,7 @@
     "redis": "^6.2.0",
     "reflect-metadata": "^0.2.2",
     "sharp": "^0.35.4",
-    "uuid": "^14.0.1"
+    "uuid": "^14.0.3"
   },
   "devDependencies": {
     "@axiumine/eslint-config-be": "^2.0.2",
