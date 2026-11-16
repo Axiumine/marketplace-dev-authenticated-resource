@@ -45,7 +45,8 @@ const { endSession, session, startSession, withTransaction } = vi.hoisted(() => 
 
 // tryCatchRethrow is deliberately NOT mocked, as in `mutations.test.mts`: turning a driver error into
 // the right GraphQL status is the behaviour under test. Only Sentry is stubbed.
-vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn() }))
+// koa-utils >= 8 reads captureMessage and withScope off @sentry/node as soon as it loads, so the factory must export both.
+vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn(), withScope: vi.fn() }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Item', () => ({ Item: { create: itemCreate } }))
 vi.mock('@lib/company/throwIfShopOwnerDontOwnCompany.mjs', () => ({ throwIfShopOwnerDontOwnCompany }))
 vi.mock('@lib/item/throwIfShopOwnerDontOwnItem.mjs', () => ({ throwIfShopOwnerDontOwnItem }))

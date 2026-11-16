@@ -16,7 +16,8 @@ const endEverySession = vi.fn()
 
 // tryCatchRethrow is deliberately NOT mocked: turning a driver error into the right GraphQL status
 // is the behaviour under test here. Only Sentry is stubbed, so its `else` branch stays silent.
-vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn() }))
+// koa-utils >= 8 reads captureMessage and withScope off @sentry/node as soon as it loads, so the factory must export both.
+vi.mock('@sentry/node', () => ({ captureException, captureMessage: vi.fn(), withScope: vi.fn() }))
 vi.mock('@axiumine/marketplace-common/models/MongoDB/Company', () => ({
   Company: { create: companyCreate }
 }))
