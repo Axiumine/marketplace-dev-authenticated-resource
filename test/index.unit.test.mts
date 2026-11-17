@@ -32,7 +32,8 @@ const bodyParserOptions: unknown[] = []
 const koaMiddlewareOptions: { context?: () => Promise<unknown> }[] = []
 const apolloServerOptions: { pluginCount: number | undefined; csrfPrevention: unknown }[] = []
 
-vi.mock('@sentry/node', () => ({ captureException, captureMessage, flush }))
+// koa-utils >= 8 reads captureMessage and withScope off @sentry/node as soon as it loads, so the factory must export both.
+vi.mock('@sentry/node', () => ({ captureException, captureMessage, flush, withScope: vi.fn() }))
 // redisClient is imported transitively by the handler, and start() itself now reads one key off it:
 // the keygrip record, to prove REDIS_KEY names the namespace this platform was seeded into (ADR-034).
 // hGetAll is the only verb that probe uses, so the stub carries that and nothing else.
