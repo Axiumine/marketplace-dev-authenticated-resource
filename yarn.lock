@@ -4805,9 +4805,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql-upload@npm:^17.1.0":
-  version: 17.1.0
-  resolution: "graphql-upload@npm:17.1.0"
+"graphql-upload@npm:^18.0.1":
+  version: 18.0.1
+  resolution: "graphql-upload@npm:18.0.1"
   dependencies:
     "@types/busboy": "npm:^1.5.0"
     "@types/node": "npm:*"
@@ -4817,15 +4817,15 @@ __metadata:
     http-errors: "npm:^2.0.0"
     object-path: "npm:^0.11.8"
   peerDependencies:
-    "@types/express": ^4.0.29 || ^5.0.0
-    "@types/koa": ^2.11.4 || ^3.0.0
-    graphql: ^16.3.0 || ^17.0.0
+    "@types/express": ^5.0.0
+    "@types/koa": ^3.0.0
+    graphql: ^17.0.0
   peerDependenciesMeta:
     "@types/express":
       optional: true
     "@types/koa":
       optional: true
-  checksum: 10c0/a1bc9d3bf0f103abf342ee9a241750e180809852077f493f2a63c32bbbae9415a863a04b00c0c6e6ea3cf7faadae50a5c0652fd3beabeea060f34e10a5e3081e
+  checksum: 10c0/b88bcd4589fa1a9ac8134bb58361edcbb3a87a7b7581525ce96c75cafeb4a7047b7cfedba3655ed6e1358136ebc713a37e99b7eb9e3d6e49401cb1528e77f097
   languageName: node
   linkType: hard
 
@@ -6493,7 +6493,7 @@ __metadata:
     graphql: "npm:^16.15.0"
     graphql-depth-limit: "npm:^1.1.0"
     graphql-scalars: "npm:^2.0.0"
-    graphql-upload: "npm:^17.1.0"
+    graphql-upload: "npm:^18.0.1"
     koa: "npm:^3.3.0"
     koa-bodyparser: "npm:^4.4.1"
     mongodb: "npm:^7.5.0"
