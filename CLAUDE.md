@@ -24,7 +24,7 @@ every pull request — two callers, both automated, and a hand is neither.
 
 - **Never commit on `main`.** Branch first: `git switch -c <type>/<slug>`. Merge = user decision alone.
 - Merged → delete branch: `git branch -d <slug>`. `-d` only. `-D` never.
-- **No remote.** Push-on-request: no `git push` unless the user asked for it in that message.
+- **Push-on-request:** no `git push` unless the user asked for it in that message.
 - **Never lower a coverage or mutation threshold, and never remove a gate.** Threshold miss → write the
   missing test. Bypasses (`SKIP_QODANA=1`, `--no-verify`) are gate removals: use only when the user says so.
 - Two spaces, not tabs (ADR-058). Prettier owns indentation (`useTabs: false`, `tabWidth: 2`); eslint's `indent` rule is off.
@@ -36,10 +36,3 @@ every pull request — two callers, both automated, and a hand is neither.
 
 commit → secret guard, lint, types, coverage, Qodana. push → same + semgrep (SAST) + trivy (dependency
 advisories) + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
-
-## GitNexus
-
-- **MUST run `impact({target, repo})` before editing a symbol** — `repo:` is mandatory, always a
-  `marketplace*` registry name.
-- **MUST run `detect_changes()` before committing.**
-- Full rules and this repo's registry name: [`AGENTS.md`](./AGENTS.md).
