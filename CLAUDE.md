@@ -36,10 +36,3 @@ every pull request — two callers, both automated, and a hand is neither.
 
 commit → secret guard, lint, types, coverage, Qodana. push → same + semgrep (SAST) + trivy (dependency
 advisories) + mutation. All blocking. Why: [`REPO.md`](./REPO.md).
-
-## GitNexus
-
-- **MUST run `impact({target, repo})` before editing a symbol** — `repo:` is mandatory, always a
-  `marketplace*` registry name.
-- **MUST run `detect_changes()` before committing.**
-- Full rules and this repo's registry name: [`AGENTS.md`](./AGENTS.md).
